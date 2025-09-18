@@ -1,39 +1,26 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# Causal Distillation Trees
+# Network-assisted Random Forest+ (NeRF+)
 
-[Causal Distillation Trees](https://arxiv.org/abs/2502.07275) (CDT) is a
-novel machine learning method for estimating interpretable subgroups in
-causal inference. CDT allows researchers to fit *any* machine learning
-model of their choice to estimate the individual-level treatment effect,
-and then leverages a simple, second-stage tree-based model to “distill”
-the estimated treatment effect into meaningful subgroups. As a result,
-CDT inherits the improvements in predictive performance from black-box
-machine learning models while preserving the interpretability of a
-simple decision tree.
+[Network-assisted Random Forest+]() (NeRF+) is a flexible and
+interpretable machine learning model for incorporating network data
+alongside node-level covariate information. Briefly, NeRF+ extends a
+generalization of random forests (RF) called RF+ [(Agarwal et
+al. 2025)](https://arxiv.org/pdf/2307.01932) to the network-assisted
+regression setting by incorporating both a network cohesion penalty and
+network embeddings as additional covariates. Using this approach, NeRF+
+inherits both the flexibility and interpretability of RFs while allowing
+researchers to easily incorporate network information in their model to
+further improve predictive performance.
 
-![](../causalDT/man/figures/cdt_diagram.png)
-
-Briefly, CDT is a two-stage learner that first fits a teacher model
-(e.g., a black-box metalearner) to estimate individual-level treatment
-effects and secondly fits a student model (e.g., a decision tree) to
-predict the estimated individual-level treatment effects, in effect
-distilling the estimated individual-level treatment effects and
-producing interpretable subgroups. This two-stage learner is learned
-using the training data. Finally, using the estimated subgroups, the
-subgroup average treatment effects are honestly estimated with a
-held-out estimation set.
-
-For more details, check out [Huang, M., Tang, T. M., Kenney, A. M.
-“Distilling heterogeneous treatment effects: Stable subgroup estimation
-in causal inference.” (2025).](https://arxiv.org/abs/2502.07275)
+For more details, check out [Tang, T. M., Levina, E., Zhu, J.
+“Interpretable Network-assisted Random Forest+.” (2025).]()
 
 ## Project Structure
 
 This directory contains all of the code necessary to reproduce the
-analysis and figures in [Huang et
-al. (2025)](https://arxiv.org/abs/2502.07275).
+analysis and figures in [Tang et al. (2025)]().
 
 Moreover, to facilitate reproducibility of this work, we leveraged
 [`renv`](https://rstudio.github.io/renv/articles/renv.html) to create a
@@ -44,7 +31,7 @@ necessary dependencies and reproduce the simulation, the following steps
 are recommended:
 
 1.  Clone this repository.
-2.  Open the `causalDT-manuscript.Rproj` in RStudio.
+2.  Open the `nerfplus-manuscript.Rproj` in RStudio.
 3.  Run the following code in the R console:
 
 ``` r
@@ -52,23 +39,12 @@ are recommended:
 renv::restore()
 ```
 
-4.  Run each of the simulation driver scripts in the `meals/` directory.
-5.  Render all of the results into a single summary `simChef`
-    documentation by running the `meals/00_render_docs.R` script.
-
-These steps will generate all of the figures and results from the
-mansucript. The rendered `simChef` documentation can be found [here](https://tiffanymtang.github.io/causalDT/simulation_results.html).
+4.  See `job_scripts/driver.sh` to run each of the simulation driver
+    scripts, located in the `meals/` directory.
+5.  Render all of the figures/results by running the `scripts/figures.R`
+    script.
 
 ## Citation
 
 ``` r
-@article{huang2025distilling,
-  title={Distilling heterogeneous treatment effects: Stable subgroup estimation in causal inference}, 
-  author={Melody Huang and Tiffany M. Tang and Ana M. Kenney},
-  year={2025},
-  eprint={2502.07275},
-  archivePrefix={arXiv},
-  primaryClass={stat.ME},
-  url={https://arxiv.org/abs/2502.07275}, 
-}
 ```
