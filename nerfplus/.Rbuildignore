@@ -4,3 +4,7 @@
 ^LICENSE\.md$
 ^data-raw$
 ^results_*
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^\.github$

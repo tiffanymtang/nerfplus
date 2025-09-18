@@ -1,13 +1,15 @@
 Package: nerfplus
-Title: What the Package Does (One Line, Title Case)
+Title: Network-assisted Random Forest+ (NeRF+)
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
+    person("Tiffany", "Tang", , "ttang4@nd.edu", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-8079-6867"))
+Description: Network-assisted Random Forest+ (NeRF+) is a flexible and interpretable machine learning model for incorporating network data alongside node-level covariate information. Briefly, NeRF+ extends a generalization of random forests (RF) called RF+ to the network-assisted regression setting by incorporating both a network cohesion penalty and network embeddings as additional covariates. Using this approach, NeRF+ inherits both the flexibility and interpretability of RFs while allowing researchers to easily incorporate network information in their model to further improve predictive performance. This package provides tools to fit and interpret NeRF+ models, as detailed in Tang, Levina, and Zhu (2025) <doi:xxx>.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
+Depends: 
+    R (>= 4.1.0)
 Suggests: 
     DT,
     fresh,
@@ -48,6 +50,5 @@ Imports:
 LinkingTo: 
     Rcpp,
     RcppArmadillo
-Depends: 
-    R (>= 3.5)
 LazyData: true
+URL: https://tiffanymtang.github.io/nerfplus/
