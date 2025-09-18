@@ -1,0 +1,53 @@
+Package: nerfplus
+Title: What the Package Does (One Line, Title Case)
+Version: 0.0.0.9000
+Authors@R: 
+    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
+Description: What the package does (one paragraph).
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Suggests: 
+    DT,
+    fresh,
+    ggplot2,
+    ggraph,
+    htmltools,
+    igraph,
+    kableExtra,
+    knitr,
+    patchwork,
+    plotly,
+    shiny,
+    shinycssloaders,
+    shinydashboard,
+    shinydashboardPlus,
+    shinyjs,
+    shinyWidgets,
+    testthat (>= 3.0.0),
+    tippy
+Config/testthat/edition: 3
+Imports: 
+    abind,
+    caret,
+    dplyr,
+    furrr,
+    glmnet,
+    irlba,
+    Matrix,
+    purrr,
+    ranger,
+    Rcpp,
+    rlang,
+    stringr,
+    tibble,
+    tidyr,
+    tidyselect,
+    yardstick
+LinkingTo: 
+    Rcpp,
+    RcppArmadillo
+Depends: 
+    R (>= 3.5)
+LazyData: true

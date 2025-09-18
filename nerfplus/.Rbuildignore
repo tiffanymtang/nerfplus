@@ -1,0 +1,6 @@
+^nerfplus\.Rproj$
+^\.Rproj\.user$
+^README\.Rmd$
+^LICENSE\.md$
+^data-raw$
+^results_*
