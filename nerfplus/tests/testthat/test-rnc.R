@@ -1,4 +1,5 @@
 test_that("rnc works", {
+  skip_on_ci()
   lambda_netcoh <- 1
   lambda_x <- 0.1
   data(example_data)

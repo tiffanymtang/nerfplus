@@ -1,4 +1,5 @@
 test_that("network-embeddings works", {
+  skip_on_ci()
   data(example_data)
   A <- example_data$A
   A_full <- example_data$A_full

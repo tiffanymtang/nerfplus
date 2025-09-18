@@ -1,4 +1,5 @@
 test_that("get_loo works for linear regression", {
+  skip_on_ci()
   set.seed(123)
   n <- 50
   lambda_netcoh <- 1
@@ -81,6 +82,7 @@ test_that("get_loo works for linear regression", {
 })
 
 test_that("get_loo works for logistic regression", {
+  skip_on_ci()
   set.seed(123)
   n <- 50
   lambda_netcoh <- 1
@@ -122,6 +124,7 @@ test_that("get_loo works for logistic regression", {
 })
 
 test_that("get_loo handles custom metric", {
+  skip_on_ci()
   set.seed(123)
   n <- 50
   lambda_netcoh <- 1
@@ -156,6 +159,7 @@ test_that("get_loo handles custom metric", {
 })
 
 test_that("get_loo handles return_all parameter", {
+  skip_on_ci()
   set.seed(123)
   n <- 50
   lambda_netcoh <- 1

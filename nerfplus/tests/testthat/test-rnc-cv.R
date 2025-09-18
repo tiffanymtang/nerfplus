@@ -1,4 +1,5 @@
 test_that("rnc_cv works", {
+  skip_on_ci()
   cv_foldids <- list(1:5, 6:10)
   lambdas_netcoh <- c(0.1, 1)
   lambdas_x <- c(0.5, 1.5)

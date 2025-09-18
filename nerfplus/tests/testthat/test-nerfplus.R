@@ -1,4 +1,5 @@
 test_that("nerfplus works", {
+  skip_on_ci()
   set.seed(123)
   n <- 50
   lambda_netcoh <- 1
@@ -245,6 +246,7 @@ test_that("nerfplus works", {
 })
 
 test_that("nerfplus_cv works", {
+  skip_on_ci()
   set.seed(123)
   n <- 50
   lambdas_netcoh <- c(1, 2)

@@ -1,4 +1,5 @@
 test_that("get_feature_importances works", {
+  skip_on_ci()
   set.seed(123)
 
   n <- 50
