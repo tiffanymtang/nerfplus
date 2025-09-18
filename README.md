@@ -24,9 +24,7 @@ This repository contains:
 1.  An R package `nerfplus` to run NeRF+ on your own data (see
     [nerfplus/](nerfplus/))
 2.  All code necessary to reproduce the analysis and figures in [Tang et
-    al. (2025)]() (see [nerfplus-manuscript/](nerfplus-manuscript/) and
-    additional results
-    [here](https://tiffanymtang.github.io/nerfplus/supplementary_materials.html))
+    al. (2025)]() (see [nerfplus-manuscript/](nerfplus-manuscript/))
 
 ## Installation of the R package
 
@@ -137,7 +135,7 @@ data.frame(ytest = example_data$ytest, yhat = yhat) |>
   ggplot2::theme_minimal()
 ```
 
-![](causalDT/man/figures/README-predict-plot-1.png)<!-- -->
+![](nerfplus/man/figures/README-predict-plot-1.png)<!-- -->
 
 To next interpret our fitted NeRF+ model, we can report:
 

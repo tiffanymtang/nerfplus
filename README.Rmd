@@ -8,7 +8,7 @@ output: github_document
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  fig.path = file.path("causalDT", "man", "figures", "README-")
+  fig.path = file.path("nerfplus", "man", "figures", "README-")
 )
 ```
 
@@ -23,7 +23,7 @@ For more details, check out [Tang, T. M., Levina, E., Zhu, J. "Interpretable Net
 This repository contains: 
 
 1. An R package `nerfplus` to run NeRF+ on your own data (see [nerfplus/](nerfplus/))
-2. All code necessary to reproduce the analysis and figures in [Tang et al. (2025)]() (see [nerfplus-manuscript/](nerfplus-manuscript/) and additional results [here](https://tiffanymtang.github.io/nerfplus/supplementary_materials.html))
+2. All code necessary to reproduce the analysis and figures in [Tang et al. (2025)]() (see [nerfplus-manuscript/](nerfplus-manuscript/))
 
 ## Installation of the R package
 
