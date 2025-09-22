@@ -3,24 +3,26 @@
 
 # Network-assisted Random Forest+ (NeRF+)
 
-[Network-assisted Random Forest+]() (NeRF+) is a flexible and
-interpretable machine learning model for incorporating network data
-alongside node-level covariate information. Briefly, NeRF+ extends a
-generalization of random forests (RF) called RF+ [(Agarwal et
-al. 2025)](https://arxiv.org/pdf/2307.01932) to the network-assisted
-regression setting by incorporating both a network cohesion penalty and
-network embeddings as additional covariates. Using this approach, NeRF+
-inherits both the flexibility and interpretability of RFs while allowing
-researchers to easily incorporate network information in their model to
-further improve predictive performance.
+[Network-assisted Random Forest+](https://arxiv.org/abs/2509.15611)
+(NeRF+) is a flexible and interpretable machine learning model for
+incorporating network data alongside node-level covariate information.
+Briefly, NeRF+ extends a generalization of random forests (RF) called
+RF+ [(Agarwal et al. 2025)](https://arxiv.org/pdf/2307.01932) to the
+network-assisted regression setting by incorporating both a network
+cohesion penalty and network embeddings as additional covariates. Using
+this approach, NeRF+ inherits both the flexibility and interpretability
+of RFs while allowing researchers to easily incorporate network
+information in their model to further improve predictive performance.
 
 For more details, check out [Tang, T. M., Levina, E., Zhu, J.
-“Interpretable Network-assisted Random Forest+.” (2025).]()
+“Interpretable Network-assisted Random Forest+.”
+(2025).](https://arxiv.org/abs/2509.15611)
 
 ## Project Structure
 
 This directory contains all of the code necessary to reproduce the
-analysis and figures in [Tang et al. (2025)]().
+analysis and figures in [Tang et
+al. (2025)](https://arxiv.org/abs/2509.15611).
 
 Moreover, to facilitate reproducibility of this work, we leveraged
 [`renv`](https://rstudio.github.io/renv/articles/renv.html) to create a
@@ -46,5 +48,12 @@ renv::restore()
 
 ## Citation
 
-``` r
-```
+    @article{tang2025interpretable,
+      title={Interpretable Network-assisted Random Forest+}, 
+      author={Tiffany M. Tang and Elizaveta Levina and Ji Zhu},
+      year={2025},
+      eprint={2509.15611},
+      archivePrefix={arXiv},
+      primaryClass={stat.ML},
+      url={https://arxiv.org/abs/2509.15611}, 
+    }

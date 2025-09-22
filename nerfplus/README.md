@@ -9,7 +9,8 @@
 
 nerfplus is an R package for fitting and interpreting
 **Ne**twork-assisted **R**andom **F**orest+ (NeRF+) models, as
-introduced in [Tang, Levina, and Zhu (2025+)](). At a high-level, NeRF+
+introduced in [Tang, Levina, and Zhu
+(2025)](https://arxiv.org/abs/2509.15611). At a high-level, NeRF+
 provides a flexible and interpretable framework to incorporate network
 information alongside node-level covariate information in a generalized
 random forest framework. In practice, NeRF+ often exhibits
@@ -235,5 +236,17 @@ run_app(
   loo_results = interpret_results$loo_results
 )
 ```
+
+## Citation
+
+    @article{tang2025interpretable,
+      title={Interpretable Network-assisted Random Forest+}, 
+      author={Tiffany M. Tang and Elizaveta Levina and Ji Zhu},
+      year={2025},
+      eprint={2509.15611},
+      archivePrefix={arXiv},
+      primaryClass={stat.ML},
+      url={https://arxiv.org/abs/2509.15611}, 
+    }
 
 <!-- You'll still need to render `README.Rmd` regularly, to keep `README.md` up-to-date. `devtools::build_readme()` is handy for this. -->
