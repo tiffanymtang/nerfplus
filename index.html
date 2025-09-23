@@ -11,8 +11,8 @@
 <script src="deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Network-assisted Random Forest+ (NeRF+)">
-<meta name="description" content="Network-assisted Random Forest+ (NeRF+) is a flexible and interpretable machine learning model for incorporating network data alongside node-level covariate information. Briefly, NeRF+ extends a generalization of random forests (RF) called RF+ to the network-assisted regression setting by incorporating both a network cohesion penalty and network embeddings as additional covariates. Using this approach, NeRF+ inherits both the flexibility and interpretability of RFs while allowing researchers to easily incorporate network information in their model to further improve predictive performance. This package provides tools to fit and interpret NeRF+ models, as detailed in Tang, Levina, and Zhu (2025) &lt;doi:xxx&gt;.">
-<meta property="og:description" content="Network-assisted Random Forest+ (NeRF+) is a flexible and interpretable machine learning model for incorporating network data alongside node-level covariate information. Briefly, NeRF+ extends a generalization of random forests (RF) called RF+ to the network-assisted regression setting by incorporating both a network cohesion penalty and network embeddings as additional covariates. Using this approach, NeRF+ inherits both the flexibility and interpretability of RFs while allowing researchers to easily incorporate network information in their model to further improve predictive performance. This package provides tools to fit and interpret NeRF+ models, as detailed in Tang, Levina, and Zhu (2025) &lt;doi:xxx&gt;.">
+<meta name="description" content="Network-assisted Random Forest+ (NeRF+) is a flexible and interpretable machine learning model for incorporating network data alongside node-level covariate information. Briefly, NeRF+ extends a generalization of random forests (RF) called RF+ to the network-assisted regression setting by incorporating both a network cohesion penalty and network embeddings as additional covariates. Using this approach, NeRF+ inherits both the flexibility and interpretability of RFs while allowing researchers to easily incorporate network information in their model to further improve predictive performance. This package provides tools to fit and interpret NeRF+ models, as detailed in Tang, Levina, and Zhu (2025) &lt;doi:10.48550/arXiv.2509.15611&gt;.">
+<meta property="og:description" content="Network-assisted Random Forest+ (NeRF+) is a flexible and interpretable machine learning model for incorporating network data alongside node-level covariate information. Briefly, NeRF+ extends a generalization of random forests (RF) called RF+ to the network-assisted regression setting by incorporating both a network cohesion penalty and network embeddings as additional covariates. Using this approach, NeRF+ inherits both the flexibility and interpretability of RFs while allowing researchers to easily incorporate network information in their model to further improve predictive performance. This package provides tools to fit and interpret NeRF+ models, as detailed in Tang, Levina, and Zhu (2025) &lt;doi:10.48550/arXiv.2509.15611&gt;.">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -49,7 +49,7 @@
 </h1></div>
 <!-- badges: start -->
 <!-- badges: end -->
-<p>nerfplus is an R package for fitting and interpreting <strong>Ne</strong>twork-assisted <strong>R</strong>andom <strong>F</strong>orest+ (NeRF+) models, as introduced in <a href="">Tang, Levina, and Zhu (2025+)</a>. At a high-level, NeRF+ provides a flexible and interpretable framework to incorporate network information alongside node-level covariate information in a generalized random forest framework. In practice, NeRF+ often exhibits highly-competitive predictive performance and importantly, can also be easily interpreted using feature importance and sample influence measures that are implemented in this package’s interpretability toolkit.</p>
+<p>nerfplus is an R package for fitting and interpreting <strong>Ne</strong>twork-assisted <strong>R</strong>andom <strong>F</strong>orest+ (NeRF+) models, as introduced in <a href="https://arxiv.org/abs/2509.15611" class="external-link">Tang, Levina, and Zhu (2025)</a>. At a high-level, NeRF+ provides a flexible and interpretable framework to incorporate network information alongside node-level covariate information in a generalized random forest framework. In practice, NeRF+ often exhibits highly-competitive predictive performance and importantly, can also be easily interpreted using feature importance and sample influence measures that are implemented in this package’s interpretability toolkit.</p>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
@@ -218,6 +218,19 @@
 <span>  fi_results <span class="op">=</span> <span class="va">interpret_results</span><span class="op">$</span><span class="va">fi_results</span>,</span>
 <span>  loo_results <span class="op">=</span> <span class="va">interpret_results</span><span class="op">$</span><span class="va">loo_results</span></span>
 <span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
+</h2>
+<div class="sourceCode" id="cb11"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="sc">@</span>article{tang2025interpretable,</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  title<span class="ot">=</span>{Interpretable Network<span class="sc">-</span>assisted Random Forest<span class="sc">+</span>}, </span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>  author<span class="ot">=</span>{Tiffany M. Tang and Elizaveta Levina and Ji Zhu},</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>  year<span class="ot">=</span>{<span class="dv">2025</span>},</span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>  eprint<span class="ot">=</span>{<span class="fl">2509.15611</span>},</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a>  archivePrefix<span class="ot">=</span>{arXiv},</span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a>  primaryClass<span class="ot">=</span>{stat.ML},</span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a>  url<span class="ot">=</span>{https<span class="sc">:</span><span class="er">//</span>arxiv.org<span class="sc">/</span>abs<span class="sc">/</span><span class="fl">2509.15611</span>}, </span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a>}</span></code></pre></div>
 <!-- You'll still need to render `README.Rmd` regularly, to keep `README.md` up-to-date. `devtools::build_readme()` is handy for this. -->
 </div>
 </div>
