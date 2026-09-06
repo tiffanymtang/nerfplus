@@ -84,6 +84,145 @@ rnc <- function(x, y, A, nodedegrees = NULL, nodeids = NULL,
 }
 
 
+#' @keywords internal
+rnc_linear_cached_factor <- function(x, y, A, lambda_netcoh, lambda_x = 0,
+                                     lambda_l = 0.05,
+                                     factor_cache = NULL) {
+  if (is.data.frame(x)) {
+    x <- as.matrix(x)
+  }
+  if (!isTRUE(length(dim(y)) == 2)) {
+    y <- matrix(y, ncol = 1)
+  }
+  n <- nrow(x)
+  p <- ncol(x)
+  if ((nrow(y) != n) || (nrow(A) != n) || (ncol(A) != n)) {
+    return(rnc(
+      x = x, y = y, A = A, lambda_netcoh = lambda_netcoh,
+      lambda_x = lambda_x, lambda_l = lambda_l, family = "linear",
+      low_dim = FALSE
+    ))
+  }
+  if (is.null(factor_cache)) {
+    factor_cache <- new.env(parent = emptyenv())
+  }
+
+  cached_fit <- rnc_linear_scaled_cached_factor(
+    x = x,
+    y = y,
+    A = A,
+    lambda_netcoh = lambda_netcoh / n^2,
+    lambda_x = lambda_x / p,
+    lambda_l = lambda_l,
+    factor_cache = factor_cache
+  )
+
+  if (is.null(cached_fit)) {
+    cached_fit <- rnc(
+      x = x, y = y, A = A, lambda_netcoh = lambda_netcoh,
+      lambda_x = lambda_x, lambda_l = lambda_l, family = "linear",
+      low_dim = FALSE
+    )
+  } else {
+    cached_fit$lambda_netcoh <- lambda_netcoh
+    cached_fit$lambda_x <- lambda_x
+    cached_fit$lambda_l <- lambda_l
+    cached_fit$nalpha_train <- nrow(A)
+    cached_fit$family <- "linear"
+    class(cached_fit) <- "rnc"
+  }
+  cached_fit
+}
+
+
+#' @keywords internal
+get_cached_rnc_linear_factor <- function(A, lambda_netcoh, lambda_l, n,
+                                         factor_cache) {
+  get_cached_rnc_linear_scaled_factor(
+    A = A,
+    nodedegrees = NULL,
+    lambda_netcoh = lambda_netcoh / n^2,
+    lambda_l = lambda_l,
+    n = n,
+    factor_cache = factor_cache
+  )
+}
+
+
+#' @keywords internal
+rnc_linear_scaled_cached_factor <- function(x, y, A, nodedegrees = NULL,
+                                            lambda_netcoh, lambda_x = 0,
+                                            lambda_l = 0.05,
+                                            factor_cache = NULL) {
+  n <- nrow(x)
+  p <- ncol(x)
+  if (is.null(factor_cache)) {
+    factor_cache <- new.env(parent = emptyenv())
+  }
+
+  tryCatch(
+    {
+      factor_entry <- get_cached_rnc_linear_scaled_factor(
+        A = A,
+        nodedegrees = nodedegrees,
+        lambda_netcoh = lambda_netcoh,
+        lambda_l = lambda_l,
+        n = n,
+        factor_cache = factor_cache
+      )
+      if (is.null(factor_entry)) {
+        stop("Unable to factor network matrix.")
+      }
+
+      y_mean <- mean(y)
+      y_centered <- y - y_mean
+      solved <- as.matrix(Matrix::solve(factor_entry$factor, cbind(y_centered, x)))
+      inv_y <- solved[, 1, drop = FALSE]
+      inv_x <- solved[, -1, drop = FALSE]
+
+      beta_lhs <- crossprod(x, x - inv_x)
+      diag(beta_lhs) <- diag(beta_lhs) + rep(lambda_x, length.out = p)
+      beta_rhs <- crossprod(x, y_centered - inv_y)
+      beta <- solve(beta_lhs, beta_rhs)
+      alpha <- inv_y - inv_x %*% beta
+
+      list(
+        intercept = y_mean,
+        alpha = alpha,
+        beta = beta
+      )
+    },
+    error = function(e) NULL
+  )
+}
+
+
+#' @keywords internal
+get_cached_rnc_linear_scaled_factor <- function(A, nodedegrees = NULL,
+                                                lambda_netcoh, lambda_l, n,
+                                                factor_cache) {
+  key <- paste(
+    n,
+    format(lambda_netcoh, digits = 17),
+    format(lambda_l, digits = 17),
+    sep = ":"
+  )
+  if (!exists(key, envir = factor_cache, inherits = FALSE)) {
+    L <- make_sparse_laplacian(A, lambda_l = lambda_l, nodedegrees = nodedegrees)
+    K <- Matrix::Diagonal(n = n) + lambda_netcoh * L
+    factor <- tryCatch(
+      Matrix::Cholesky(K, LDL = FALSE, Imult = 0),
+      error = function(e) NULL
+    )
+    if (is.null(factor)) {
+      return(NULL)
+    }
+    assign(key, list(factor = factor), envir = factor_cache)
+  }
+  get(key, envir = factor_cache, inherits = FALSE)
+}
+
+
 #' Fit linear regression with network cohesion
 #'
 #' @inheritParams rnc
@@ -96,14 +235,25 @@ rnc_linear <- function(x, y, A, nodedegrees = NULL, nodeids = NULL,
   if (is.null(low_dim)) {
     low_dim <- p <= (n / 5)
   }
-  if (is.null(nodedegrees)) {
-    D <- diag(rowSums(A))
-  } else {
-    D <- diag(nodedegrees)
+
+  if (is.null(nodeids) && !low_dim) {
+    out <- rnc_linear_scaled_cached_factor(
+      x = x,
+      y = y,
+      A = A,
+      nodedegrees = nodedegrees,
+      lambda_netcoh = lambda_netcoh,
+      lambda_x = lambda_x,
+      lambda_l = lambda_l
+    )
+    if (!is.null(out)) {
+      return(out)
+    }
   }
-  L <- D - A + diag(rep(lambda_l, nrow(A)))
-  W <- diag(rep(1, n))
-  H <- diag(rep(1, p)) * lambda_x
+
+  L <- make_laplacian(A, lambda_l = lambda_l, nodedegrees = nodedegrees)
+  W <- diag(1, nrow = n)
+  H <- diag(lambda_x, nrow = p)
 
   # center y
   y_mean <- mean(y)
@@ -151,6 +301,27 @@ rnc_logistic <- function(x, y, A, nodedegrees = NULL, nodeids = NULL,
   if (!is.null(nodeids)) {
     stop("nodeids is not yet supported for logistic regression.")
   }
+  L <- make_laplacian(A, lambda_l = lambda_l, nodedegrees = nodedegrees)
+  rnc_logistic_scaled_laplacian(
+    x = x, y = y, L = L,
+    lambda_netcoh = lambda_netcoh,
+    lambda_x = lambda_x,
+    init = init,
+    newton_maxit = newton_maxit,
+    newton_tol = newton_tol,
+    verbose = verbose
+  )
+}
+
+
+#' Fit scaled logistic regression with a precomputed network Laplacian
+#'
+#' @keywords internal
+rnc_logistic_scaled_laplacian <- function(x, y, L, lambda_netcoh,
+                                          lambda_x = 0, init = NULL,
+                                          newton_maxit = 50,
+                                          newton_tol = 1e-4,
+                                          verbose = FALSE) {
   n <- nrow(x)
   p <- ncol(x)
   if (is.null(init)) {
@@ -166,17 +337,11 @@ rnc_logistic <- function(x, y, A, nodedegrees = NULL, nodeids = NULL,
     include_intercept <- FALSE
   }
 
-  if (is.null(nodedegrees)) {
-    D <- diag(rowSums(A))
-  } else {
-    D <- diag(nodedegrees)
-  }
-  L <- D - A + diag(rep(lambda_l, n))
-  H <- diag(rep(1, p)) * lambda_x
+  H <- diag(lambda_x, nrow = p)
   if (include_intercept) {
-    # to add intercept row/col
-    H <- rbind(0, H)
-    H <- cbind(0, H)
+    H_intercept <- matrix(0, nrow = p + 1, ncol = p + 1)
+    H_intercept[-1, -1] <- H
+    H <- H_intercept
   }
   out <- rnc_logistic_solver(
     X = x, Y = y, L = L, H = H, lambda_netcoh = lambda_netcoh,

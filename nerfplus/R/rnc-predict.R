@@ -59,6 +59,17 @@ predict.rnc <- function(object, x, A_full, nodeids = NULL, ...) {
 #' @inheritParams predict.rnc
 #' @keywords internal
 predict_rnc_linear <- function(object, x, A_full, nodeids = NULL) {
+  predict_rnc_linear_with_laplacian(
+    object = object, x = x, A_full = A_full, nodeids = nodeids,
+    L_full = NULL, solve_cache = NULL
+  )
+}
+
+
+#' @keywords internal
+predict_rnc_linear_with_laplacian <- function(object, x, A_full, nodeids = NULL,
+                                              L_full = NULL,
+                                              solve_cache = NULL) {
   n <- nrow(x)
   n_alpha <- nrow(A_full)
   p <- ncol(x)
@@ -83,8 +94,9 @@ predict_rnc_linear <- function(object, x, A_full, nodeids = NULL) {
       alpha = alpha
     )
   } else {
-    D <- diag(rowSums(A_full))
-    L <- D - A_full + diag(rep(lambda_l, n_alpha))
+    if (is.null(L_full)) {
+      L_full <- make_laplacian(A_full, lambda_l = lambda_l)
+    }
 
     train_idx <- which(!is.na(alpha))
     if (n_alpha == n_train) {
@@ -97,9 +109,34 @@ predict_rnc_linear <- function(object, x, A_full, nodeids = NULL) {
       }
     }
 
-    L22 <- Matrix::Matrix(L[valid_idx, valid_idx], sparse = TRUE)
-    L21 <- L[valid_idx, train_idx]
-    valid_alpha <- solve(L22, -L21 %*% alpha[train_idx], sparse = TRUE)
+    solve_entry <- get_cached_rnc_prediction_solve(
+      L_full = L_full,
+      train_idx = train_idx,
+      valid_idx = valid_idx,
+      n_train = n_train,
+      n_alpha = n_alpha,
+      lambda_l = lambda_l,
+      nodeids = nodeids,
+      alpha = alpha,
+      solve_cache = solve_cache
+    )
+    if (is.null(solve_entry)) {
+      L22 <- Matrix::Matrix(
+        L_full[valid_idx, valid_idx, drop = FALSE],
+        sparse = TRUE
+      )
+      L21 <- L_full[valid_idx, train_idx, drop = FALSE]
+      valid_alpha <- as.matrix(
+        Matrix::solve(L22, -L21 %*% alpha[train_idx])
+      )
+    } else {
+      valid_alpha <- as.matrix(
+        Matrix::solve(
+          solve_entry$factor,
+          -solve_entry$L21 %*% alpha[train_idx]
+        )
+      )
+    }
     if (!is.null(nodeids) || (n_alpha == n_train)) {
       alpha_all <- rep(NA, n_alpha)
       alpha_all[train_idx] <- alpha[train_idx]
@@ -126,7 +163,64 @@ predict_rnc_linear <- function(object, x, A_full, nodeids = NULL) {
 #' @inheritParams predict.rnc
 #' @keywords internal
 predict_rnc_logistic <- function(object, x, A_full, nodeids = NULL) {
-  out <- predict_rnc_linear(object, x, A_full, nodeids)
+  out <- predict_rnc_logistic_with_laplacian(
+    object = object, x = x, A_full = A_full, nodeids = nodeids,
+    L_full = NULL, solve_cache = NULL
+  )
+  return(out)
+}
+
+
+#' @keywords internal
+predict_rnc_logistic_with_laplacian <- function(object, x, A_full, nodeids = NULL,
+                                                L_full = NULL,
+                                                solve_cache = NULL) {
+  out <- predict_rnc_linear_with_laplacian(
+    object, x, A_full, nodeids, L_full, solve_cache
+  )
   out$y <- as.matrix(1 / (1 + exp(-out$y)))
   return(out)
+}
+
+
+#' @keywords internal
+get_cached_rnc_prediction_solve <- function(L_full, train_idx, valid_idx,
+                                            n_train, n_alpha, lambda_l,
+                                            nodeids, alpha, solve_cache) {
+  if (is.null(solve_cache) || !is.null(nodeids)) {
+    return(NULL)
+  }
+  if (length(train_idx) != n_train || !identical(train_idx, seq_len(n_train))) {
+    return(NULL)
+  }
+  if (!identical(valid_idx, (n_train + 1):n_alpha)) {
+    return(NULL)
+  }
+  if (any(is.na(alpha[train_idx]))) {
+    return(NULL)
+  }
+
+  key <- paste(n_train, n_alpha, format(lambda_l, digits = 17), sep = ":")
+  if (!exists(key, envir = solve_cache, inherits = FALSE)) {
+    L22 <- Matrix::Matrix(
+      L_full[valid_idx, valid_idx, drop = FALSE],
+      sparse = TRUE
+    )
+    factor <- tryCatch(
+      Matrix::Cholesky(L22, LDL = FALSE, Imult = 0),
+      error = function(e) NULL
+    )
+    if (is.null(factor)) {
+      return(NULL)
+    }
+    assign(
+      key,
+      list(
+        factor = factor,
+        L21 = L_full[valid_idx, train_idx, drop = FALSE]
+      ),
+      envir = solve_cache
+    )
+  }
+  get(key, envir = solve_cache, inherits = FALSE)
 }

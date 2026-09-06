@@ -5,6 +5,22 @@ using namespace Rcpp;
 const double SMOOTH = 0.00000001;
 
 
+bool is_identity_matrix(const arma::mat& W) {
+  if (W.n_rows != W.n_cols) {
+    return false;
+  }
+  for (arma::uword j = 0; j < W.n_cols; ++j) {
+    for (arma::uword i = 0; i < W.n_rows; ++i) {
+      double expected = (i == j) ? 1.0 : 0.0;
+      if (std::abs(W(i, j) - expected) > 1e-12) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+
 // function to solve basic Least square with network cohesion, when covariates are provided.
 arma::mat RNC_LS(arma::mat X, arma::mat Y, arma::sp_mat L, arma::sp_mat H,
                  arma::sp_mat W, double lambda_netcoh) {
@@ -22,6 +38,28 @@ arma::mat RNC_LS(arma::mat X, arma::mat Y, arma::sp_mat L, arma::sp_mat H,
   arma::mat A = X.t() * (I - W * inverse) * W * X + H;
   arma::mat beta = arma::solve(A, b);
   arma::mat alpha = inverse * W * (Y - X * beta);
+  arma::mat result = arma::join_cols(alpha, beta);
+  return result;
+}
+
+// Equivalent to RNC_LS for identity W, but avoids solving for the full n x n
+// inverse. This is faster and lower-memory when p is well below n.
+arma::mat RNC_LS_BlockSolve(arma::mat X, arma::mat Y, arma::sp_mat L,
+                            arma::mat H, double lambda_netcoh) {
+
+  int n = X.n_rows;
+  int p = X.n_cols;
+  arma::sp_mat I_sp = arma::speye<arma::sp_mat>(n, n);
+  arma::mat rhs = arma::join_rows(Y, X);
+
+  arma::mat solved = arma::spsolve(I_sp + lambda_netcoh * L, rhs, "lapack");
+  arma::mat inv_Y = solved.col(0);
+  arma::mat inv_X = solved.cols(1, p);
+
+  arma::mat beta_lhs = X.t() * (X - inv_X) + H;
+  arma::mat beta_rhs = X.t() * (Y - inv_Y);
+  arma::mat beta = arma::solve(beta_lhs, beta_rhs);
+  arma::mat alpha = inv_Y - inv_X * beta;
   arma::mat result = arma::join_cols(alpha, beta);
   return result;
 }
@@ -44,7 +82,12 @@ List rnc_solver(NumericMatrix X, NumericMatrix Y,
   arma::sp_mat H_sp = arma::sp_mat(Hmat);
   arma::sp_mat W_sp = arma::sp_mat(Wmat);
 
-  arma::mat result = RNC_LS(Xmat, Ymat, L_sp, H_sp, W_sp, lambda_netcoh);
+  arma::mat result;
+  if (is_identity_matrix(Wmat)) {
+    result = RNC_LS_BlockSolve(Xmat, Ymat, L_sp, Hmat, lambda_netcoh);
+  } else {
+    result = RNC_LS(Xmat, Ymat, L_sp, H_sp, W_sp, lambda_netcoh);
+  }
   return Rcpp::List::create(
     Rcpp::Named("alpha") = result.head_rows(Xmat.n_rows),
     Rcpp::Named("beta") = result.tail_rows(result.n_rows - Xmat.n_rows)
@@ -216,12 +259,13 @@ List rnc_solver_path(NumericMatrix X, NumericMatrix Y, NumericMatrix L,
   int n = Xmat.n_rows;
   int p = Xmat.n_cols;
   arma::sp_mat I_sp = arma::speye<arma::sp_mat>(n, n);
-  arma::mat I = arma::eye<arma::mat>(n, n);
+  arma::mat rhs = arma::join_rows(Ymat, Xmat);
 
-  arma::mat inverse = spsolve(I_sp + lambda_netcoh * L_sp, I, "lapack");
-  arma::mat Xxinverse = Xmat.t() * (I - inverse);
-  arma::mat A = Xxinverse * Xmat;
-  arma::mat b = Xxinverse * Ymat;
+  arma::mat solved = spsolve(I_sp + lambda_netcoh * L_sp, rhs, "lapack");
+  arma::vec alpha1 = solved.col(0);
+  arma::mat alpha2 = solved.cols(1, p);
+  arma::mat A = Xmat.t() * (Xmat - alpha2);
+  arma::vec b = Xmat.t() * (Ymat.col(0) - alpha1);
 
   // Compute eigendecomposition
   arma::vec A_evalues;
@@ -229,9 +273,7 @@ List rnc_solver_path(NumericMatrix X, NumericMatrix Y, NumericMatrix L,
   arma::eig_sym(A_evalues, A_evectors, A);
 
   // Save some repeated computations
-  arma::mat Utb = A_evectors.t() * b;
-  arma::vec alpha1 = inverse * Ymat;
-  arma::mat alpha2 = inverse * Xmat;
+  arma::vec Utb = A_evectors.t() * b;
 
   int n_lambdas_x = lambdas_x.size();
   arma::mat betas = arma::zeros<arma::mat>(p, n_lambdas_x);
@@ -240,8 +282,7 @@ List rnc_solver_path(NumericMatrix X, NumericMatrix Y, NumericMatrix L,
     NumericVector lambda_x = lambdas_x[i];
     arma::vec lambda_x_vec(lambda_x.begin(), lambda_x.size(), false);
     arma::vec diag_values = 1 / (A_evalues + lambda_x_vec);
-    arma::sp_mat diag_mat = create_sparse_diagonal(diag_values);
-    arma::vec beta = A_evectors * diag_mat * Utb;
+    arma::vec beta = A_evectors * (diag_values % Utb);
     betas.col(i) = beta;
     arma::vec alpha = alpha1 - alpha2 * beta;
     alphas.col(i) = alpha;
@@ -279,11 +320,11 @@ List rnc_solver_path_predict(NumericMatrix X, NumericMatrix Y, NumericMatrix L,
   arma::mat L22_mat(L22.begin(), L22.nrow(), L22.ncol(), false);
   arma::mat L21_mat(L21.begin(), L21.nrow(), L21.ncol(), false);
   arma::sp_mat L22_sp = arma::sp_mat(L22_mat);
+  arma::mat test_alphas = spsolve(L22_sp, -L21_mat * alphas, "lapack");
 
   arma::vec errs(alphas.n_cols, arma::fill::zeros);
   for (int j = 0; j < alphas.n_cols; ++j) {
-    arma::vec test_alpha = spsolve(L22_sp, -L21_mat * alphas.col(j), "lapack");
-    arma::vec prediction = test_alpha + X_test_mat * betas.col(j);
+    arma::vec prediction = test_alphas.col(j) + X_test_mat * betas.col(j);
     errs[j] = calculate_mse(Y_test_mat, prediction);
   }
 
@@ -380,47 +421,83 @@ arma::mat logit_p(arma::mat eta){
   return result;
 }
 
+arma::mat RNC_weighted_LS_BlockSolve(arma::mat X, arma::mat z,
+                                     arma::sp_mat L, arma::mat H,
+                                     arma::vec w_vec,
+                                     double lambda_netcoh) {
+  int n = X.n_rows;
+  int p = X.n_cols;
+  arma::sp_mat K = lambda_netcoh * L;
+  K.diag() += w_vec;
+
+  arma::vec wz = w_vec % z.col(0);
+  arma::mat WX = X.each_col() % w_vec;
+  arma::mat rhs = arma::join_rows(wz, WX);
+
+  arma::mat solved = arma::spsolve(K, rhs, "lapack");
+  arma::vec inv_wz = solved.col(0);
+  arma::mat inv_wx = solved.cols(1, p);
+
+  arma::mat beta_lhs = X.t() * WX + H - WX.t() * inv_wx;
+  arma::vec beta_rhs = X.t() * wz - WX.t() * inv_wz;
+  arma::vec beta = arma::solve(beta_lhs, beta_rhs);
+  arma::vec alpha = inv_wz - inv_wx * beta;
+
+  arma::mat result = arma::join_cols(alpha, beta);
+  return result;
+}
+
+
+arma::mat eta_from_theta(arma::mat theta, arma::mat X) {
+  int n = X.n_rows;
+  arma::vec alpha = theta(arma::span(0, n - 1), 0);
+  arma::vec beta = theta(arma::span(n, theta.n_rows - 1), 0);
+  arma::mat eta = alpha + X * beta;
+  return eta;
+}
+
 // function to solve logistic regression with network cohesion, when covariates are provided.
-arma::mat RNC_Logit(arma::mat X, arma::mat Y,
-                    arma::sp_mat M, arma::mat theta_init,
+arma::mat RNC_Logit(arma::mat X, arma::mat Y, arma::sp_mat L, arma::mat H,
+                    arma::mat theta_init, double lambda_netcoh,
                     int maxit, double tol, bool verbose){
 
   int n = X.n_rows;
   int iter = 0;
   double err = 0;
-  arma::mat I = arma::eye<arma::mat>(n, n);
-  arma::mat X_tilde = arma::join_rows(I, X);
   arma::mat eta, theta_old, theta_new;
   double ell;
 
   // Do Newton Method
   theta_old = theta_init;
-  eta = X_tilde * theta_old;
+  eta = eta_from_theta(theta_old, X);
   arma::mat one_n = arma::ones(n, 1);
   arma::mat P = logit_p(eta);
-  ell = loglike_bernoulli(Y, P);
+  if (verbose) {
+    ell = loglike_bernoulli(Y, P);
+  }
   arma::mat residual = Y - P;
   arma::mat w_vec = P % (one_n - P);
   arma::mat z = eta + residual / w_vec;
-  arma::sp_mat W = arma::sp_mat(n, n);
-  W.diag() = w_vec;
   bool converge = false;
   while (!converge) {
     iter += 1;
-    theta_new = RNC_LS_Naive(X, z, M, W);
+    theta_new = RNC_weighted_LS_BlockSolve(
+      X, z, L, H, w_vec.col(0), lambda_netcoh
+    );
     err = arma::norm(theta_new - theta_old, 2) /
       (arma::norm(theta_old, 2) + SMOOTH);
     if (err < tol) {
       converge = true;
     }
     theta_old = theta_new;
-    eta = X_tilde * theta_old;
+    eta = eta_from_theta(theta_old, X);
     P = logit_p(eta);
-    ell = loglike_bernoulli(Y, P);
+    if (verbose) {
+      ell = loglike_bernoulli(Y, P);
+    }
     residual = Y - P;
     w_vec = P % (one_n - P);
     z = eta + residual / w_vec;
-    W.diag() = w_vec;
     if (iter == maxit){
       if (verbose) {
         Rcout << "Maximum iteraction reached before converge!" << std::endl;
@@ -453,13 +530,11 @@ List rnc_logistic_solver(NumericMatrix X, NumericMatrix Y,
 
   int n = Xmat.n_rows;
   int p = Xmat.n_cols;
+  arma::sp_mat L_sp = arma::sp_mat(Lmat);
 
-  arma::mat Omega = arma::zeros<arma::mat>(n + p, n + p);
-  Omega(arma::span(0, n - 1), arma::span(0, n - 1)) = lambda_netcoh * Lmat;
-  Omega(arma::span(n, n + p - 1), arma::span(n, n + p - 1)) = Hmat;
-  arma::sp_mat M_sp = arma::sp_mat(Omega);
-
-  arma::mat result = RNC_Logit(Xmat, Ymat, M_sp, thetamat, maxit, tol, verbose);
+  arma::mat result = RNC_Logit(
+    Xmat, Ymat, L_sp, Hmat, thetamat, lambda_netcoh, maxit, tol, verbose
+  );
   return Rcpp::List::create(
     Rcpp::Named("alpha") = result.head_rows(n),
     Rcpp::Named("beta") = result.tail_rows(result.n_rows - n)

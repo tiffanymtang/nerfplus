@@ -21,6 +21,32 @@
 #' @keywords internal
 NULL
 
+#' Construct a dense graph Laplacian with optional ridge adjustment
+#'
+#' @keywords internal
+make_laplacian <- function(A, lambda_l = 0, nodedegrees = NULL) {
+  if (is.null(nodedegrees)) {
+    nodedegrees <- rowSums(A)
+  }
+  L <- -A
+  diag(L) <- nodedegrees - diag(A) + lambda_l
+  return(L)
+}
+
+#' Construct a sparse graph Laplacian with optional ridge adjustment
+#'
+#' @keywords internal
+make_sparse_laplacian <- function(A, lambda_l = 0, nodedegrees = NULL) {
+  if (is.null(nodedegrees)) {
+    nodedegrees <- rowSums(A)
+  }
+  A_sparse <- Matrix::Matrix(A, sparse = TRUE)
+  Matrix::Diagonal(
+    n = nrow(A_sparse),
+    x = as.numeric(nodedegrees) + lambda_l
+  ) - A_sparse
+}
+
 #' Preprocessing helper functions prior to fitting the RF in NeRF+ models
 #'
 #' @name nerfplus_preprocessing
@@ -229,18 +255,14 @@ apply_pre_rf_preprocessing <- function(preprocess_fit,
 apply_post_rf_preprocessing <- function(object, x) {
   factor_levels <- purrr::compact(object$forest$covariate.levels)
   if (length(factor_levels) > 0) {
-    x <- x |>
-      dplyr::mutate(
-        dplyr::across(
-          tidyselect::all_of(names(factor_levels)),
-          ~ as.numeric(
-            factor(
-              as.character(.x),
-              levels = factor_levels[[as.character(dplyr::cur_column())]]
-            )
-          )
+    for (factor_name in names(factor_levels)) {
+      x[[factor_name]] <- as.numeric(
+        factor(
+          as.character(x[[factor_name]]),
+          levels = factor_levels[[factor_name]]
         )
       )
+    }
   }
   return(x)
 }
@@ -255,7 +277,7 @@ apply_post_rf_preprocessing <- function(object, x) {
 #'
 #' @keywords internal
 get_forest_paths <- function(tree_infos) {
-  purrr::map(tree_infos, ~get_tree_paths(.x))
+  lapply(tree_infos, get_tree_paths)
 }
 
 
@@ -281,19 +303,11 @@ get_tree_paths <- function(tree_info) {
 
 #' @keywords internal
 get_unnormalized_psi <- function(x, tree_info, tree_paths, node_preds,
-                                 unordered_factors = NULL) {
-  # to avoid no visible binding note
-  terminal <- NULL
-
+                                 unordered_factors = NULL,
+                                 as_matrix = FALSE) {
   x_mat <- as.matrix(x)
-  x_colnames_df <- tibble::tibble(
-    name = colnames(x),
-    idx = 0:(length(colnames(x)) - 1)
-  )
-
-  inner_tree_info <- tree_info |>
-    dplyr::filter(!terminal) |>
-    dplyr::left_join(x_colnames_df, by = c("splitvarName" = "name"))
+  inner_tree_info <- tree_info[!tree_info$terminal, , drop = FALSE]
+  split_vars <- match(inner_tree_info$splitvarName, colnames(x)) - 1L
 
   if (length(unordered_factors) == 0) {
     psi <- extract_psi_cpp(
@@ -301,7 +315,7 @@ get_unnormalized_psi <- function(x, tree_info, tree_paths, node_preds,
       node_preds = node_preds,
       tree_paths = tree_paths,
       node_ids = inner_tree_info$nodeID,
-      split_vars = inner_tree_info$idx,
+      split_vars = split_vars,
       split_vals = inner_tree_info$splitval
     )
   } else {
@@ -310,7 +324,7 @@ get_unnormalized_psi <- function(x, tree_info, tree_paths, node_preds,
       node_preds = node_preds,
       tree_paths = tree_paths,
       node_ids = inner_tree_info$nodeID,
-      split_vars = inner_tree_info$idx,
+      split_vars = split_vars,
       split_vals = inner_tree_info$splitval,
       unordered_factors = as.integer(
         which(colnames(x) %in% unordered_factors) - 1
@@ -318,10 +332,11 @@ get_unnormalized_psi <- function(x, tree_info, tree_paths, node_preds,
     )
   }
 
-  psi <- psi |>
-    as.data.frame() |>
-    tibble::as_tibble() |>
-    stats::setNames(paste0(".node", inner_tree_info$nodeID))
+  colnames(psi) <- paste0(".node", inner_tree_info$nodeID)
+  if (!as_matrix) {
+    psi <- as.data.frame(psi)
+    psi <- tibble::as_tibble(psi)
+  }
 
   return(psi)
 }
@@ -352,14 +367,16 @@ get_unnormalized_psi <- function(x, tree_info, tree_paths, node_preds,
 #' @keywords internal
 fit_psi <- function(x, tree_info, tree_paths, node_preds,
                     unordered_factors = NULL,
-                    normalize = FALSE, inbag_counts = NULL) {
+                    normalize = FALSE, inbag_counts = NULL,
+                    as_matrix = FALSE) {
 
   psi <- get_unnormalized_psi(
     x = x,
     tree_info = tree_info,
     tree_paths = tree_paths,
     node_preds = node_preds,
-    unordered_factors = unordered_factors
+    unordered_factors = unordered_factors,
+    as_matrix = as_matrix
   )
 
   psi_unique_values <- NULL
@@ -367,22 +384,34 @@ fit_psi <- function(x, tree_info, tree_paths, node_preds,
     if (is.null(inbag_counts)) {
       inbag_counts <- rep(1, nrow(psi))
     }
-    psi_unique_values <- purrr::map(
-      psi,
-      ~ c(
-        -sqrt(sum((.x == 1) * inbag_counts) / sum((.x == -1) * inbag_counts)),
-        sqrt(sum((.x == -1) * inbag_counts) / sum((.x == 1) * inbag_counts))
-      )
+    if (as_matrix) {
+      psi <- as.matrix(psi)
+      psi_df <- as.data.frame(psi)
+    } else {
+      psi <- as.data.frame(psi)
+      psi_df <- psi
+    }
+    psi_unique_values <- lapply(
+      psi_df,
+      function(.x) {
+        c(
+          -sqrt(sum((.x == 1) * inbag_counts) / sum((.x == -1) * inbag_counts)),
+          sqrt(sum((.x == -1) * inbag_counts) / sum((.x == 1) * inbag_counts))
+        )
+      }
     )
-    psi <- purrr::map2(
-      .x = psi, .y = psi_unique_values,
-      ~ dplyr::case_when(
-        .x == -1 ~ .y[1],
-        .x == 1 ~ .y[2],
-        TRUE ~ 0
-      )
-    ) |>
-      as.data.frame()
+    for (psi_name in names(psi_df)) {
+      psi_col <- psi_df[[psi_name]]
+      psi_vals <- psi_unique_values[[psi_name]]
+      psi_normalized <- numeric(length(psi_col))
+      psi_normalized[psi_col == -1] <- psi_vals[1]
+      psi_normalized[psi_col == 1] <- psi_vals[2]
+      if (as_matrix) {
+        psi[, psi_name] <- psi_normalized
+      } else {
+        psi[[psi_name]] <- psi_normalized
+      }
+    }
   }
 
   return(list(psi = psi, psi_unique_values = psi_unique_values))
@@ -392,26 +421,39 @@ fit_psi <- function(x, tree_info, tree_paths, node_preds,
 #' @rdname nerfplus_psi
 #' @keywords internal
 apply_psi <- function(x, tree_info, tree_paths, node_preds,
-                      unordered_factors = NULL, psi_unique_values = NULL) {
+                      unordered_factors = NULL, psi_unique_values = NULL,
+                      as_matrix = FALSE) {
 
   psi <- get_unnormalized_psi(
     x = x,
     tree_info = tree_info,
     tree_paths = tree_paths,
     node_preds = node_preds,
-    unordered_factors = unordered_factors
+    unordered_factors = unordered_factors,
+    as_matrix = as_matrix
   )
 
   if (!is.null(psi_unique_values)) {
-    psi <- purrr::map2(
-      .x = psi, .y = psi_unique_values[colnames(psi)],
-      ~ dplyr::case_when(
-        .x == -1 ~ .y[1],
-        .x == 1 ~ .y[2],
-        TRUE ~ 0
-      )
-    ) |>
-      as.data.frame()
+    if (as_matrix) {
+      psi <- as.matrix(psi)
+      psi_df <- as.data.frame(psi)
+    } else {
+      psi <- as.data.frame(psi)
+      psi_df <- psi
+    }
+    psi_unique_values <- psi_unique_values[colnames(psi_df)]
+    for (psi_name in names(psi_df)) {
+      psi_col <- psi_df[[psi_name]]
+      psi_vals <- psi_unique_values[[psi_name]]
+      psi_normalized <- numeric(length(psi_col))
+      psi_normalized[psi_col == -1] <- psi_vals[1]
+      psi_normalized[psi_col == 1] <- psi_vals[2]
+      if (as_matrix) {
+        psi[, psi_name] <- psi_normalized
+      } else {
+        psi[[psi_name]] <- psi_normalized
+      }
+    }
   }
 
   return(psi)
@@ -444,22 +486,20 @@ apply_psi <- function(x, tree_info, tree_paths, node_preds,
 #'
 #' @keywords internal
 fit_augmentation <- function(x, psi, tree_info = NULL, include_raw = TRUE) {
-  # to avoid no visible binding note
-  splitvarName <- NULL
-
   dummy_fit <- NULL
   if (include_raw) {
-    splitvars <- tree_info |>
-      dplyr::filter(!is.na(splitvarName)) |>
-      dplyr::pull(splitvarName) |>
-      unique()
+    splitvars <- get_tree_splitvars(tree_info)
     x_splitvar <- x[, splitvars, drop = FALSE]
     dummy_out <- fit_dummy_code(x_splitvar)
     dummy_fit <- dummy_out$dummy_fit
     x_splitvar <- dummy_out$x
-    x_aug <- as.matrix(cbind(x_splitvar, psi))
+    if (is.null(dummy_fit)) {
+      x_splitvar <- as.matrix(x_splitvar)
+    }
+    psi <- if (is.matrix(psi)) psi else as.matrix(psi)
+    x_aug <- cbind(x_splitvar, psi)
   } else {
-    x_aug <- as.matrix(psi)
+    x_aug <- if (is.matrix(psi)) psi else as.matrix(psi)
   }
   out <- list(
     x = x_aug,
@@ -473,21 +513,26 @@ fit_augmentation <- function(x, psi, tree_info = NULL, include_raw = TRUE) {
 #' @keywords internal
 apply_augmentation <- function(x, psi, tree_info = NULL, include_raw = TRUE,
                                dummy_fit = NULL) {
-  # placeholder to avoid no visible binding note
-  splitvarName <- NULL
-
   if (include_raw) {
-    splitvars <- tree_info |>
-      dplyr::filter(!is.na(splitvarName)) |>
-      dplyr::pull(splitvarName) |>
-      unique()
+    splitvars <- get_tree_splitvars(tree_info)
     x_splitvar <- x[, splitvars, drop = FALSE]
     x_splitvar <- apply_dummy_code(dummy_fit, x_splitvar)
-    x_aug <- as.matrix(cbind(x_splitvar, psi))
+    if (is.null(dummy_fit)) {
+      x_splitvar <- as.matrix(x_splitvar)
+    }
+    psi <- if (is.matrix(psi)) psi else as.matrix(psi)
+    x_aug <- cbind(x_splitvar, psi)
   } else {
-    x_aug <- as.matrix(psi)
+    x_aug <- if (is.matrix(psi)) psi else as.matrix(psi)
   }
   return(x_aug)
+}
+
+
+#' @keywords internal
+get_tree_splitvars <- function(tree_info) {
+  splitvars <- tree_info$splitvarName
+  unique(splitvars[!is.na(splitvars)])
 }
 
 

@@ -224,7 +224,7 @@ nerfplus <- function(x, y, A = NULL, nodeids = NULL,
     stop("Please ensure that no column names in x start with '.alpha'.")
   }
 
-  # maybe stsandardize x and add network embedding features prior to fitting RF
+  # maybe standardize x and add network embedding features prior to fitting RF
   pre_rf_preprocessing_info <- fit_pre_rf_preprocessing(
     x = x,
     A = A,
@@ -262,6 +262,19 @@ nerfplus <- function(x, y, A = NULL, nodeids = NULL,
   # convert any categorical variables to numeric
   x_numeric <- apply_post_rf_preprocessing(rf_fit, x)
 
+  use_cached_rnc_factor <- (
+    include_netcoh &&
+      identical(family, "linear") &&
+      identical(sample_split, "none") &&
+      is.null(nodeids) &&
+      !parallel
+  )
+  rnc_factor_cache <- if (use_cached_rnc_factor) {
+    new.env(parent = emptyenv())
+  } else {
+    NULL
+  }
+
   # fit NeRF+ for each tree
   nerfplus_fits <- pmap_fun(
     list(
@@ -285,7 +298,8 @@ nerfplus <- function(x, y, A = NULL, nodeids = NULL,
         node_preds = tree_node_preds,
         unordered_factors = unordered_factors,
         normalize = normalize_stump,
-        inbag_counts = tree_inbag_counts
+        inbag_counts = tree_inbag_counts,
+        as_matrix = TRUE
       )
       psi <- psi_out$psi
 
@@ -299,21 +313,34 @@ nerfplus <- function(x, y, A = NULL, nodeids = NULL,
       x_augmented <- x_augmented_out$x
 
       # subset to inbag or oob samples if specified
-      if (sample_split == "inbag") {
+      if (sample_split == "none") {
+        keep_idxs <- rep(TRUE, nrow(x_augmented))
+        x_train <- x_augmented
+        y_train <- y
+        A_train <- A
+        nodeids_train <- nodeids
+      } else if (sample_split == "inbag") {
         keep_idxs <- tree_inbag_counts > 0
+        x_train <- x_augmented[keep_idxs, , drop = FALSE]
+        y_train <- y[keep_idxs]
+        if (is.null(nodeids)) {
+          A_train <- A[keep_idxs, keep_idxs]
+          nodeids_train <- NULL
+        } else {
+          A_train <- A
+          nodeids_train <- nodeids[keep_idxs]
+        }
       } else if (sample_split == "oob") {
         keep_idxs <- tree_inbag_counts == 0
-      } else {
-        keep_idxs <- rep(TRUE, length(tree_inbag_counts))
-      }
-      x_train <- x_augmented[keep_idxs, , drop = FALSE]
-      y_train <- y[keep_idxs]
-      if (is.null(nodeids)) {
-        A_train <- A[keep_idxs, keep_idxs]
-        nodeids_train <- NULL
-      } else {
-        A_train <- A
-        nodeids_train <- nodeids[keep_idxs]
+        x_train <- x_augmented[keep_idxs, , drop = FALSE]
+        y_train <- y[keep_idxs]
+        if (is.null(nodeids)) {
+          A_train <- A[keep_idxs, keep_idxs]
+          nodeids_train <- NULL
+        } else {
+          A_train <- A
+          nodeids_train <- nodeids[keep_idxs]
+        }
       }
 
       # if no splits in tree, add placeholder/intercept column to x_train
@@ -333,11 +360,19 @@ nerfplus <- function(x, y, A = NULL, nodeids = NULL,
 
       if (include_netcoh) {
         # fit RNC
-        fit <- rnc(
-          x = x_train, y = y_train, A = A_train, nodeids = nodeids_train,
-          family = family,
-          lambda_netcoh = lam_netcoh, lambda_x = lambda_x, lambda_l = lam_l
-        )
+        if (use_cached_rnc_factor) {
+          fit <- rnc_linear_cached_factor(
+            x = x_train, y = y_train, A = A_train,
+            lambda_netcoh = lam_netcoh, lambda_x = lambda_x,
+            lambda_l = lam_l, factor_cache = rnc_factor_cache
+          )
+        } else {
+          fit <- rnc(
+            x = x_train, y = y_train, A = A_train, nodeids = nodeids_train,
+            family = family,
+            lambda_netcoh = lam_netcoh, lambda_x = lambda_x, lambda_l = lam_l
+          )
+        }
         if (is.null(nodeids_train)) {
           alpha <- rep(NA, nrow(x_augmented))
           alpha[keep_idxs] <- fit$alpha
@@ -371,7 +406,11 @@ nerfplus <- function(x, y, A = NULL, nodeids = NULL,
       fit$preprocessing_info <- list(
         psi_unique_values = psi_out$psi_unique_values,
         dummy_fit = x_augmented_out$dummy_fit,
-        x_train_means = colMeans(x_train)
+        x_train_means = colMeans(x_train),
+        x_aug_colnames = colnames(x_train),
+        grouped_features = get_grouped_tree_features(
+          colnames(x), colnames(x_train), tree_info
+        )
       )
       return(fit)
     }
@@ -398,6 +437,7 @@ nerfplus <- function(x, y, A = NULL, nodeids = NULL,
     ),
     unordered_factors = unordered_factors
   )
+  attr(out, "forest_paths") <- forest_paths
   class(out) <- "nerfplus"
   return(out)
 }
@@ -565,7 +605,7 @@ nerfplus_cv <- function(x, y, A = NULL, nodeids = NULL,
       )
   }
 
-  # maybe stsandardize x and add network embedding features prior to fitting RF
+  # maybe standardize x and add network embedding features prior to fitting RF
   pre_rf_preprocessing_info <- fit_pre_rf_preprocessing(
     x = x,
     A = A,
@@ -623,7 +663,8 @@ nerfplus_cv <- function(x, y, A = NULL, nodeids = NULL,
           node_preds = tree_node_preds,
           unordered_factors = unordered_factors,
           normalize = normalize_stump,
-          inbag_counts = tree_inbag_counts
+          inbag_counts = tree_inbag_counts,
+          as_matrix = TRUE
         )
         psi <- psi_out$psi
 
@@ -637,21 +678,34 @@ nerfplus_cv <- function(x, y, A = NULL, nodeids = NULL,
         x_augmented <- x_augmented_out$x
 
         # subset to inbag or oob samples if specified
-        if (sample_split == "inbag") {
+        if (sample_split == "none") {
+          keep_idxs <- rep(TRUE, nrow(x_augmented))
+          x_train <- x_augmented
+          y_train <- y
+          A_train <- A
+          nodeids_train <- nodeids
+        } else if (sample_split == "inbag") {
           keep_idxs <- tree_inbag_counts > 0
+          x_train <- x_augmented[keep_idxs, , drop = FALSE]
+          y_train <- y[keep_idxs]
+          if (is.null(nodeids)) {
+            A_train <- A[keep_idxs, keep_idxs]
+            nodeids_train <- NULL
+          } else {
+            A_train <- A
+            nodeids_train <- nodeids[keep_idxs]
+          }
         } else if (sample_split == "oob") {
           keep_idxs <- tree_inbag_counts == 0
-        } else {
-          keep_idxs <- rep(TRUE, length(tree_inbag_counts))
-        }
-        x_train <- x_augmented[keep_idxs, , drop = FALSE]
-        y_train <- y[keep_idxs]
-        if (is.null(nodeids)) {
-          A_train <- A[keep_idxs, keep_idxs]
-          nodeids_train <- NULL
-        } else {
-          A_train <- A
-          nodeids_train <- nodeids[keep_idxs]
+          x_train <- x_augmented[keep_idxs, , drop = FALSE]
+          y_train <- y[keep_idxs]
+          if (is.null(nodeids)) {
+            A_train <- A[keep_idxs, keep_idxs]
+            nodeids_train <- NULL
+          } else {
+            A_train <- A
+            nodeids_train <- nodeids[keep_idxs]
+          }
         }
 
         # if no splits in tree, add placeholder/intercept column to x_train
@@ -703,10 +757,7 @@ nerfplus_cv <- function(x, y, A = NULL, nodeids = NULL,
             family == "linear" ~ "gaussian",
             family == "logistic" ~ "binomial"
           )
-          response_type <- dplyr::case_when(
-            family == "linear" ~ "response",
-            family == "logistic" ~ "class"
-          )
+          response_type <- "response"
 
           if (is.null(lambdas_embed) && is.null(lambdas_raw)) {
             fit <- glmnet_wrapper(
@@ -829,6 +880,19 @@ nerfplus_cv <- function(x, y, A = NULL, nodeids = NULL,
     )
   }
 
+  use_cached_rnc_factor <- (
+    include_netcoh &&
+      identical(family, "linear") &&
+      identical(sample_split, "none") &&
+      is.null(nodeids) &&
+      !parallel
+  )
+  rnc_factor_cache <- if (use_cached_rnc_factor) {
+    new.env(parent = emptyenv())
+  } else {
+    NULL
+  }
+
   # fit NeRF+ for each tree using best hyperparameters
   nerfplus_fits <- pmap_fun(
     list(
@@ -847,7 +911,8 @@ nerfplus_cv <- function(x, y, A = NULL, nodeids = NULL,
         node_preds = tree_node_preds,
         unordered_factors = unordered_factors,
         normalize = normalize_stump,
-        inbag_counts = tree_inbag_counts
+        inbag_counts = tree_inbag_counts,
+        as_matrix = TRUE
       )
       psi <- psi_out$psi
 
@@ -861,21 +926,34 @@ nerfplus_cv <- function(x, y, A = NULL, nodeids = NULL,
       x_augmented <- x_augmented_out$x
 
       # subset to inbag or oob samples if specified
-      if (sample_split == "inbag") {
+      if (sample_split == "none") {
+        keep_idxs <- rep(TRUE, nrow(x_augmented))
+        x_train <- x_augmented
+        y_train <- y
+        A_train <- A
+        nodeids_train <- nodeids
+      } else if (sample_split == "inbag") {
         keep_idxs <- tree_inbag_counts > 0
+        x_train <- x_augmented[keep_idxs, , drop = FALSE]
+        y_train <- y[keep_idxs]
+        if (is.null(nodeids)) {
+          A_train <- A[keep_idxs, keep_idxs]
+          nodeids_train <- NULL
+        } else {
+          A_train <- A
+          nodeids_train <- nodeids[keep_idxs]
+        }
       } else if (sample_split == "oob") {
         keep_idxs <- tree_inbag_counts == 0
-      } else {
-        keep_idxs <- rep(TRUE, length(tree_inbag_counts))
-      }
-      x_train <- x_augmented[keep_idxs, , drop = FALSE]
-      y_train <- y[keep_idxs]
-      if (is.null(nodeids)) {
-        A_train <- A[keep_idxs, keep_idxs]
-        nodeids_train <- NULL
-      } else {
-        A_train <- A
-        nodeids_train <- nodeids[keep_idxs]
+        x_train <- x_augmented[keep_idxs, , drop = FALSE]
+        y_train <- y[keep_idxs]
+        if (is.null(nodeids)) {
+          A_train <- A[keep_idxs, keep_idxs]
+          nodeids_train <- NULL
+        } else {
+          A_train <- A
+          nodeids_train <- nodeids[keep_idxs]
+        }
       }
 
       # if no splits in tree, add placeholder/intercept column to x_train
@@ -898,12 +976,20 @@ nerfplus_cv <- function(x, y, A = NULL, nodeids = NULL,
       if (include_netcoh) {
         # fit RNC
         best_lam_l <- best_cv_params$lambda_l[[tree_id]]
-        fit <- rnc(
-          x = x_train, y = y_train, A = A_train, nodeids = nodeids_train,
-          family = family,
-          lambda_netcoh = best_lam_netcoh, lambda_x = lambda_x,
-          lambda_l = best_lam_l
-        )
+        if (use_cached_rnc_factor) {
+          fit <- rnc_linear_cached_factor(
+            x = x_train, y = y_train, A = A_train,
+            lambda_netcoh = best_lam_netcoh, lambda_x = lambda_x,
+            lambda_l = best_lam_l, factor_cache = rnc_factor_cache
+          )
+        } else {
+          fit <- rnc(
+            x = x_train, y = y_train, A = A_train, nodeids = nodeids_train,
+            family = family,
+            lambda_netcoh = best_lam_netcoh, lambda_x = lambda_x,
+            lambda_l = best_lam_l
+          )
+        }
         if (is.null(nodeids_train)) {
           alpha <- rep(NA, nrow(x_augmented))
           alpha[keep_idxs] <- fit$alpha
@@ -934,7 +1020,11 @@ nerfplus_cv <- function(x, y, A = NULL, nodeids = NULL,
       fit$preprocessing_info <- list(
         psi_unique_values = psi_out$psi_unique_values,
         dummy_fit = x_augmented_out$dummy_fit,
-        x_train_means = colMeans(x_train)
+        x_train_means = colMeans(x_train),
+        x_aug_colnames = colnames(x_train),
+        grouped_features = get_grouped_tree_features(
+          colnames(x), colnames(x_train), tree_info
+        )
       )
       return(fit)
     }
@@ -964,6 +1054,7 @@ nerfplus_cv <- function(x, y, A = NULL, nodeids = NULL,
     ),
     unordered_factors = unordered_factors
   )
+  attr(out, "forest_paths") <- forest_paths
   class(out) <- c("nerfplus", "nerfplus_cv")
   return(out)
 }
@@ -972,6 +1063,8 @@ nerfplus_cv <- function(x, y, A = NULL, nodeids = NULL,
 #' @keywords internal
 predict_tree <- function(tree_object, x, A_full, nodeids = NULL,
                          alpha = NULL, beta = NULL, preds = NULL,
+                         L_full = NULL,
+                         solve_cache = NULL,
                          type = c("response", "alpha")) {
   type <- match.arg(type)
   if (type == "response") {
@@ -985,7 +1078,15 @@ predict_tree <- function(tree_object, x, A_full, nodeids = NULL,
         preds <- 1 / (1 + exp(-preds))
       }
     } else if ("rnc" %in% class(tree_object)) {
-      preds <- stats::predict(tree_object, x, A_full, nodeids)$y
+      if (identical(tree_object$family, "logistic")) {
+        preds <- predict_rnc_logistic_with_laplacian(
+          tree_object, x, A_full, nodeids, L_full, solve_cache
+        )$y
+      } else {
+        preds <- predict_rnc_linear_with_laplacian(
+          tree_object, x, A_full, nodeids, L_full, solve_cache
+        )$y
+      }
     } else if (any(c("glmnet", "cv.glmnet") %in% class(tree_object))) {
       preds <- stats::predict(tree_object, x, type = "response")
     } else {
@@ -995,7 +1096,9 @@ predict_tree <- function(tree_object, x, A_full, nodeids = NULL,
     if (!is.null(alpha)) {
       preds <- alpha
     } else if ("rnc" %in% class(tree_object)) {
-      preds <- stats::predict(tree_object, x, A_full, nodeids)$alpha
+      preds <- predict_rnc_linear_with_laplacian(
+        tree_object, x, A_full, nodeids, L_full, solve_cache
+      )$alpha
     } else {
       stop("No such type = 'alphas' when trained with use_netcoh = FALSE.")
     }
@@ -1004,6 +1107,121 @@ predict_tree <- function(tree_object, x, A_full, nodeids = NULL,
     preds <- c(preds)
   }
   return(preds)
+}
+
+
+#' Conformal prediction method for NeRF+
+#'
+#' @description This function generates conformal prediction intervals for a
+#'   fitted NeRF+ model, using a specified calibration dataset to compute the
+#'   nonconformity scores (measured as the absolute residuals between the
+#'   observed responses and the predictions) and a specified test dataset for
+#'   which predictions and prediction intervals are to be generated.
+#'
+#' @param object A fitted NeRF+ model object.
+#' @param x_cal A data frame or matrix of calibration data.
+#' @param x_cal_embed Optional embedding data frame or matrix for the
+#'   calibration data, whose rows are aligned with those in `x_cal`. If
+#'   provided, it will be used to augment the input `x_cal` data. Only needed if
+#'   training embeddings were manually inputted.
+#' @param y_cal A vector of observed responses for the calibration data.
+#' @param x_test A data frame or matrix of test data for which predictions are
+#'   to be made.
+#' @param x_test_embed Optional embedding data frame or matrix for the test
+#'   data, whose rows are aligned with those in `x_test`. If provided, it will
+#'   be used to augment the input `x_test` data. Only needed if training
+#'   embeddings were manually inputted.
+#' @param A_full An adjacency matrix representing the network structure for
+#'   the full set of nodes (training + calibration + testing nodes in that
+#'   order, unless `nodeids_cal` and `nodeids_test` are provided, in which case
+#'   the order of nodes in `A_full` should align with the order of node IDs in
+#'   `nodeids_cal` and `nodeids_test`).
+#' @param nodeids_cal (Optional) vector of node IDs for the calibration data, of
+#'   length equal to nrows in `x_cal`. If provided, node IDs indicate the rows
+#'   of A_full, corresponding to each calibration sample. If not provided, the
+#'   rows of A_full are assumed to be in the order of (x_train, x_cal, x_test).
+#' @param nodeids_test (Optional) vector of node IDs for the test data, of
+#'   length equal to nrows in `x_test`. If provided, node IDs indicate the rows
+#'   of A_full, corresponding to each test sample. If not provided, the rows of
+#'   A_full are assumed to be in the order of (x_train, x_cal, x_test).
+#' @param alpha Significance level for conformal prediction intervals.
+#'   Default is 0.05 for 95% prediction intervals.
+#'
+#' @returns A tibble with columns `pred`, `lower_bound`, and `upper_bound`,
+#'   containing the predicted values and the corresponding lower and upper
+#'   bounds of the conformal prediction intervals for each sample in the test
+#'   data.
+#'
+#' @examples
+#' data(example_data)
+#' train_idx <- 1:(nrow(example_data$x) / 2)
+#' cal_idx <- (nrow(example_data$x) / 2 + 1):nrow(example_data$x)
+#' x_train <- example_data$x[train_idx, ]
+#' y_train <- example_data$y[train_idx]
+#' x_cal <- example_data$x[cal_idx, ]
+#' y_cal <- example_data$y[cal_idx]
+#' nerfplus_out <- nerfplus(
+#'   x = x_train, y = y_train, A = example_data$A[train_idx, train_idx],
+#'   lambda_netcoh = 1,
+#'   lambda_embed = 0.1,
+#'   lambda_raw = 2,
+#'   lambda_stump = 3,
+#'   family = "linear", embedding = "laplacian", sample_split = "none"
+#' )
+#' conformal_out <- nerfplus_conformal(
+#'   nerfplus_out,
+#'   x_cal = x_cal, y_cal = y_cal,
+#'   x_test = example_data$xtest,
+#'   A_full = example_data$A_full,
+#'   alpha = 0.05
+#' )
+#' conformal_out |>
+#'   dplyr::mutate(
+#'    contains_true_y = y_cal >= lower_bound & y_cal <= upper_bound
+#'   ) |>
+#'   dplyr::summarize(
+#'    coverage = mean(contains_true_y)
+#'   )
+#'
+#' @export
+nerfplus_conformal <- function(object, x_cal, x_cal_embed = NULL, y_cal,
+                               x_test, x_test_embed = NULL,
+                               A_full,
+                               nodeids_cal = NULL, nodeids_test = NULL,
+                               alpha = 0.05) {
+  n_train <- nrow(object$pre_rf_preprocessing_info$embedding_fit$X[[1]])
+  n_cal <- nrow(x_cal)
+  n_test <- nrow(x_test)
+  if (is.null(object$pre_rf_preprocessing_info$nodeids)) {
+    train_idxs <- 1:n_train
+  }
+  if (is.null(nodeids_cal)) {
+    cal_idxs <- (n_train + 1):(n_train + n_cal)
+    A_cal <- A_full[c(train_idxs, cal_idxs), c(train_idxs, cal_idxs)]
+  } else {
+    A_cal <- A_full
+  }
+  preds_cal <- stats::predict(
+    object, x = x_cal, x_embed = x_cal_embed, A_full = A_cal,
+    nodeids = nodeids_cal, type = "response"
+  )
+  if (is.null(nodeids_test)) {
+    test_idxs <- (n_train + n_cal + 1):(n_train + n_cal + n_test)
+    A_test <- A_full[c(train_idxs, test_idxs), c(train_idxs, test_idxs)]
+  } else {
+    A_test <- A_full
+  }
+  preds_test <- stats::predict(
+    object, x = x_test, x_embed = x_test_embed, A_full = A_test,
+    nodeids = nodeids_test, type = "response"
+  )
+  q <- stats::quantile(abs(y_cal - preds_cal), probs = (1 - alpha) * (1 + 1 / n_train))
+  out <- tibble::tibble(
+    pred = preds_test,
+    lower_bound = preds_test - q,
+    upper_bound = preds_test + q
+  )
+  return(out)
 }
 
 
@@ -1075,48 +1293,64 @@ predict.nerfplus <- function(object, x, x_embed = NULL, A_full, nodeids = NULL,
 
   node_preds <- stats::predict(
     rf_fit, x, type = "terminalNodes", num.threads = 1
-  )$predictions |>
-    as.data.frame()
-  forest_paths <- get_forest_paths(tree_infos)
+  )$predictions
+  if (is.null(dim(node_preds))) {
+    node_preds <- matrix(node_preds, ncol = 1)
+  }
+  forest_paths <- attr(object, "forest_paths", exact = TRUE)
+  if (is.null(forest_paths)) {
+    forest_paths <- get_forest_paths(tree_infos)
+  }
 
-  preds_ls <- purrr::pmap(
-    list(
-      tree_fit = nerfplus_fits,
-      tree_info = tree_infos,
-      tree_node_preds = node_preds,
-      tree_paths = forest_paths
-    ),
-    function(tree_fit, tree_info, tree_node_preds, tree_paths) {
-      psi <- apply_psi(
-        x = x_numeric,
-        tree_info = tree_info,
-        tree_paths = tree_paths,
-        node_preds = tree_node_preds,
-        unordered_factors = unordered_factors,
-        psi_unique_values = tree_fit$preprocessing_info$psi_unique_values
-      )
-      x_augmented <- apply_augmentation(
-        x = x,
-        psi = psi,
-        tree_info = tree_info,
-        include_raw = include_raw,
-        dummy_fit = tree_fit$preprocessing_info$dummy_fit
-      )
-      if (ncol(x_augmented) == 0) {
-        x_augmented <- cbind(
-          x_augmented,
-          matrix(1, nrow = nrow(x_augmented), ncol = 1)
-        )
-      }
-      predict_tree(
-        tree_object = tree_fit, x = x_augmented, A_full = A_full,
-        nodeids = nodeids, type = type
+  ntrees <- length(nerfplus_fits)
+  preds_ls <- if (return_all) vector("list", ntrees) else NULL
+  preds_sum <- NULL
+  laplacian_cache <- new.env(parent = emptyenv())
+  solve_cache <- new.env(parent = emptyenv())
+
+  for (tree_id in seq_len(ntrees)) {
+    tree_fit <- nerfplus_fits[[tree_id]]
+    tree_info <- tree_infos[[tree_id]]
+    psi <- apply_psi(
+      x = x_numeric,
+      tree_info = tree_info,
+      tree_paths = forest_paths[[tree_id]],
+      node_preds = node_preds[, tree_id],
+      unordered_factors = unordered_factors,
+      psi_unique_values = tree_fit$preprocessing_info$psi_unique_values,
+      as_matrix = TRUE
+    )
+    x_augmented <- apply_augmentation(
+      x = x,
+      psi = psi,
+      tree_info = tree_info,
+      include_raw = include_raw,
+      dummy_fit = tree_fit$preprocessing_info$dummy_fit
+    )
+    if (ncol(x_augmented) == 0) {
+      x_augmented <- cbind(
+        x_augmented,
+        matrix(1, nrow = nrow(x_augmented), ncol = 1)
       )
     }
-  )
+    tree_preds <- predict_tree(
+      tree_object = tree_fit, x = x_augmented, A_full = A_full,
+      nodeids = nodeids,
+      L_full = get_cached_rnc_laplacian(tree_fit, A_full, laplacian_cache),
+      solve_cache = solve_cache,
+      type = type
+    )
+    if (return_all) {
+      preds_ls[[tree_id]] <- tree_preds
+    } else if (is.null(preds_sum)) {
+      preds_sum <- tree_preds
+    } else {
+      preds_sum <- preds_sum + tree_preds
+    }
+  }
 
   if (!return_all) {
-    preds <- purrr::reduce(preds_ls, `+`) / rf_fit$num.trees
+    preds <- preds_sum / rf_fit$num.trees
     if (isTRUE(ncol(preds) == 1)) {
       preds <- c(preds)
     }
@@ -1124,4 +1358,26 @@ predict.nerfplus <- function(object, x, x_embed = NULL, A_full, nodeids = NULL,
     preds <- preds_ls
   }
   return(preds)
+}
+
+
+#' @keywords internal
+get_cached_rnc_laplacian <- function(tree_fit, A_full, cache) {
+  if (!("rnc" %in% class(tree_fit))) {
+    return(NULL)
+  }
+  n_alpha <- nrow(A_full)
+  alpha <- tree_fit$alpha
+  if ((n_alpha == tree_fit$nalpha_train) && !any(is.na(alpha))) {
+    return(NULL)
+  }
+  key <- as.character(tree_fit$lambda_l)
+  if (!exists(key, envir = cache, inherits = FALSE)) {
+    assign(
+      key,
+      make_sparse_laplacian(A_full, lambda_l = tree_fit$lambda_l),
+      envir = cache
+    )
+  }
+  get(key, envir = cache, inherits = FALSE)
 }

@@ -108,7 +108,7 @@ rnc_cv <- function(x, y, A, nodeids = NULL,
   # run CV
   n_params <- nrow(lambda_grid)
   cv_errs <- matrix(0, nrow = n_params, ncol = K)
-  L_unreg <- diag(rowSums(A)) - A
+  L_unreg <- make_laplacian(A)
   for (k in 1:K) {
     valid_idx <- sort(cv_foldids[[k]])
     train_idx <- setdiff(1:n, valid_idx)
@@ -138,17 +138,18 @@ rnc_cv <- function(x, y, A, nodeids = NULL,
       if (!is.null(nodeids)) {
         stop("nodeids not yet implemented for logistic regression.")
       }
+      full_idx <- c(train_idx, valid_idx)
       cv_fit <- rnc_logistic_path(
         x = x[train_idx, , drop = FALSE],
         y = y[train_idx, , drop = FALSE],
-        A = A[train_idx, train_idx],
+        L_unreg = make_laplacian(A[train_idx, train_idx]),
         x_test = x[valid_idx, , drop = FALSE],
         y_test = y[valid_idx, , drop = FALSE],
-        A_full = A[c(train_idx, valid_idx), c(train_idx, valid_idx)],
+        L_full_unreg = L_unreg[full_idx, full_idx],
         nodeids = nodeids[train_idx],
         nodeids_test = nodeids[valid_idx],
         lambda_grid = lambda_grid,
-        newton_maxit = newton_maxit, newton_tol = newton_tol,
+        newton_maxit = newton_maxit, newton_tol = newton_tol
       )
     }
     cv_errs[, k] <- cv_fit$cv_errs
@@ -218,7 +219,8 @@ rnc_linear_path <- function(x, y, L, x_test = NULL, y_test = NULL,
     lambda_l <- lambda_grid$lambda_l[[i]]
     lambdas_x <- purrr::map(lambda_grid$lambda_x[[i]], ~ .x / p)
 
-    L_reg <- L + diag(rep(lambda_l, nrow(L)))
+    L_reg <- L
+    diag(L_reg) <- diag(L_reg) + lambda_l
     if (is.null(nodeids)) {
       if (is.null(x_test)) {
         results[[i]] <- rnc_solver_path(
@@ -226,7 +228,8 @@ rnc_linear_path <- function(x, y, L, x_test = NULL, y_test = NULL,
           lambda_netcoh = lambda_netcoh, lambdas_x = lambdas_x
         )
       } else {
-        L22_reg <- L22 + diag(rep(lambda_l, nrow(L22)))
+        L22_reg <- L22
+        diag(L22_reg) <- diag(L22_reg) + lambda_l
         results[[i]] <- rnc_solver_path_predict(
           X = x, Y = y, L = L_reg,
           X_test = x_test, Y_test = y_test, L22 = L22_reg, L21 = L21,
@@ -287,27 +290,52 @@ rnc_linear_path <- function(x, y, L, x_test = NULL, y_test = NULL,
 
 #' Fit regularization path for logistic regression with network cohesion
 #' @keywords internal
-rnc_logistic_path <- function(x, y, A, x_test = NULL, y_test = NULL,
-                              A_full = NULL, lambda_grid,
+rnc_logistic_path <- function(x, y, A = NULL, x_test = NULL, y_test = NULL,
+                              A_full = NULL, L_unreg = NULL,
+                              L_full_unreg = NULL, lambda_grid,
                               nodeids = NULL, nodeids_test = NULL,
                               newton_maxit = 50, newton_tol = 1e-4, ...) {
   n <- nrow(x)
   p <- ncol(x)
+  if (is.null(L_unreg)) {
+    L_unreg <- make_laplacian(A)
+  }
+  if (!is.null(x_test)) {
+    if (is.null(L_full_unreg)) {
+      L_full_unreg <- make_laplacian(A_full)
+    }
+    if (is.null(A_full)) {
+      A_full <- matrix(numeric(), nrow = nrow(L_full_unreg), ncol = 0)
+    }
+    predict_solve_cache <- new.env(parent = emptyenv())
+  }
   results <- list()
   for (i in 1:nrow(lambda_grid)) {
     lambda_netcoh <- lambda_grid$lambda_netcoh[[i]]
     lambda_x <- lambda_grid$lambda_x[[i]]
     lambda_l <- lambda_grid$lambda_l[[i]]
 
-    log_fit <- rnc(
-      x = x, y = y, A = A, nodeids = nodeids,
-      lambda_netcoh = lambda_netcoh, lambda_x = lambda_x, lambda_l = lambda_l,
-      family = "logistic", newton_maxit = newton_maxit, newton_tol = newton_tol,
-      ...
+    L <- L_unreg
+    diag(L) <- diag(L) + lambda_l
+    log_fit <- rnc_logistic_scaled_laplacian(
+      x = x, y = y, L = L,
+      lambda_netcoh = lambda_netcoh / (n^2),
+      lambda_x = lambda_x / p,
+      newton_maxit = newton_maxit,
+      newton_tol = newton_tol
     )
+    log_fit$lambda_netcoh <- lambda_netcoh
+    log_fit$lambda_x <- lambda_x
+    log_fit$lambda_l <- lambda_l
+    log_fit$nalpha_train <- nrow(L_unreg)
+    log_fit$family <- "logistic"
+    class(log_fit) <- "rnc"
     if (!is.null(x_test)) {
-      log_preds <- stats::predict(
-        log_fit, x = x_test, A_full = A_full, nodeids = nodeids_test
+      L_full <- L_full_unreg
+      diag(L_full) <- diag(L_full) + lambda_l
+      log_preds <- predict_rnc_logistic_with_laplacian(
+        log_fit, x = x_test, A_full = A_full, nodeids = nodeids_test,
+        L_full = L_full, solve_cache = predict_solve_cache
       )
       log_fit$errs <- yardstick::roc_auc_vec(
         factor(y_test, levels = c(1, 0)), c(log_preds$y)
@@ -332,5 +360,3 @@ rnc_logistic_path <- function(x, y, A, x_test = NULL, y_test = NULL,
   )
   return(out)
 }
-
-
