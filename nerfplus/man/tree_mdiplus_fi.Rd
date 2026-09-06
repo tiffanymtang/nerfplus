@@ -12,7 +12,9 @@ tree_mdiplus_fi(
   nodeids = NULL,
   metric,
   x_means = NULL,
-  grouped_features = NULL
+  grouped_features = NULL,
+  L_full = NULL,
+  solve_cache = NULL
 )
 }
 \arguments{

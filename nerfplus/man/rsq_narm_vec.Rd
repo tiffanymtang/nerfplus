@@ -11,7 +11,7 @@ rsq_narm_vec(truth, estimate, ...)
 
 \item{estimate}{A numeric vector of estimated values.}
 
-\item{...}{Additional arguments passed to \code{\link[yardstick:rsq]{yardstick::rsq_vec()}}}
+\item{...}{Additional arguments passed to \code{\link[yardstick:rsq_vec]{yardstick::rsq_vec()}}}
 }
 \value{
 A numeric value representing the R-squared value, or 0 if the

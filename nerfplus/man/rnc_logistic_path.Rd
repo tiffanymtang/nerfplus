@@ -7,10 +7,12 @@
 rnc_logistic_path(
   x,
   y,
-  A,
+  A = NULL,
   x_test = NULL,
   y_test = NULL,
   A_full = NULL,
+  L_unreg = NULL,
+  L_full_unreg = NULL,
   lambda_grid,
   nodeids = NULL,
   nodeids_test = NULL,

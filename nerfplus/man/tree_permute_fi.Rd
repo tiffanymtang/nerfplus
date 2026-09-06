@@ -13,7 +13,9 @@ tree_permute_fi(
   metric,
   grouped_features = NULL,
   B = 10,
-  return_preds = FALSE
+  return_preds = FALSE,
+  L_full = NULL,
+  solve_cache = NULL
 )
 }
 \arguments{
