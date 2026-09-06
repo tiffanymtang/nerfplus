@@ -5,6 +5,9 @@
 #$ -t 1-28
 
 module load R
+module load gdal
+module load geos
+module load udunits
 
 SCHIDS=(
     "1" "10" "13" "19"
@@ -17,4 +20,4 @@ SCHIDS=(
 )
 
 cd ../
-Rscript meals/05_school_conflict.R --schid ${SCHIDS[$SGE_TASK_ID-1]} --include_w1 --connected --impute_mode ${1}
+Rscript meals/${1}.R "${@:2}" --schid ${SCHIDS[$SGE_TASK_ID-1]}

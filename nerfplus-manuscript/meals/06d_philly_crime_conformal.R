@@ -1,7 +1,7 @@
 rm(list = ls())
-EXP_NAME <- "Philly Crime (Global Importance)"
+EXP_NAME <- "Philly Crime (Conformal)"
 set.seed(331)
-here::i_am(file.path("meals", "06b_philly_crime_global_importance.R"))
+here::i_am(file.path("meals", "06d_philly_crime_conformal.R"))
 source(here::here(file.path("meals", "setup.R")))
 
 #### DGPs ####
@@ -19,7 +19,7 @@ dgp <- create_dgp(
   load_philly_crime_data, .name = dgp_name, train_prop = opt$train_prop,
   subsample = opt$subsample, split_mode = opt$split_mode,
   include_weather = opt$include_weather, weighted = opt$weighted_network,
-  test_all = FALSE
+  test_all = TRUE
 )
 data_list <- dgp$generate()
 
@@ -31,10 +31,8 @@ lambdas_netcoh <- exp(seq(log(1000), log(0.001), length.out = nlams)) * nrow(dat
 lambdas_embed <- exp(seq(log(1000), log(0.001), length.out = nlams)) * ncol(data_list$x)
 lambdas_raw <- exp(seq(log(1000), log(0.001), length.out = nlams)) * ncol(data_list$x)
 lambdas_stump <- exp(seq(log(1000), log(0.001), length.out = nlams)) * ncol(data_list$x)
+importance_modes <- NULL
 source(here::here(file.path("meals", "shared_methods.R")))
-
-# overwrite lm_method to save data once for each rep
-lm_method$method_params$return_data <- "verbose_data_out"
 
 #### Evaluators and Visualizers ####
 
@@ -43,15 +41,33 @@ source(here::here(file.path("meals", "shared_visualizers.R")))
 
 #### Run Experiment ####
 source(here::here(file.path("meals", "shared_experiments.R")))
-philly_crime_experiment <- philly_crime_experiment |>
-  add_dgp(dgp)
-# out <- run_experiment(philly_crime_experiment)
-out <- run_experiment(
-  philly_crime_experiment, n_reps = N_REPS, save = SAVE,
-  use_cached = USE_CACHED, checkpoint_n_reps = CHECKPOINT_N_REPS,
-  future.globals = FUTURE_GLOBALS, future.packages = FUTURE_PACKAGES
+
+conformal_out <- nerfplus_conformal_method$fit(data_list)
+conformal_out |>
+  tidyr::unnest(c(y_test, predictions)) |>
+  dplyr::mutate(
+    is_in_ci = (y_test >= lower_bound) & (y_test <= upper_bound)
+  ) |>
+  dplyr::summarise(
+    coverage = mean(is_in_ci),
+    .groups = "drop"
+  )
+
+OUT_DIR <- file.path(
+  SAVE_DIR, "results", EXP_NAME,
+  sprintf("%s_%s", opt$embedding_type, opt$embedding_ndim),
+  sprintf(
+    "Philly Crime (%s%s%s, %s)",
+    opt$split_mode,
+    ifelse(opt$include_weather, ", with weather", ""),
+    ifelse(opt$weighted_network, ", weighted network", ""),
+    opt$subsample
+  )
 )
-# export_visualizers(philly_crime_experiment)
-# file.remove(
-#   file.path(philly_crime_experiment$get_save_dir(), "experiment_cached_params.rds")
-# )
+if (!dir.exists(OUT_DIR)) {
+  dir.create(OUT_DIR, recursive = TRUE)
+}
+saveRDS(
+  conformal_out,
+  file = file.path(OUT_DIR, "conformal_results.rds")
+)

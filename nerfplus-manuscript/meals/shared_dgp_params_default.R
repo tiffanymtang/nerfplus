@@ -17,3 +17,4 @@ omega <- 0.5  # Network effect strength in network autocorrelation dgp
 pve <- 0.6  # Proportion of variance explained
 n_outliers <- 1  # Number of outliers
 outliers_scale <- 3  # Scale of outliers
+train_prop <- 0.8  # Proportion of samples used for training (vs. testing)

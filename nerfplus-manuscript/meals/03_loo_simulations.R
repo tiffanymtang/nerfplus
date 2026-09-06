@@ -1,21 +1,13 @@
 rm(list = ls())
 EXP_NAME <- "LOO Simulations"
-SAVE <- TRUE
-USE_CACHED <- FALSE
-CHECKPOINT_N_REPS <- 0
 set.seed(331)
-
+here::i_am(file.path("meals", "03_loo_simulations.R"))
 source(here::here(file.path("meals", "setup.R")))
-N_REPS <- 1
 
 #### DGPs ####
 
 source(here::here(file.path("meals", "shared_dgp_params_default.R")))
 source(here::here(file.path("meals", "shared_dgps.R")))
-
-dgp <- poly_network_autocorrelation_dgp
-dgp_name <- dgp$name
-print(dgp_name)
 
 #### Methods ####
 
@@ -24,6 +16,9 @@ importance_modes <- NULL
 source(here::here(file.path("meals", "shared_methods.R")))
 
 #### Run Experiment ####
+dgp_name <- dgp$name
+print(dgp_name)
+
 # fit NeRF+ with CV to get appropriate CV hyperparameters
 data_list <- dgp$generate()
 nerfplus_out <- nerfplus_method$fit(data_list, return_fit = TRUE)

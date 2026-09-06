@@ -174,6 +174,7 @@ rf_method_fun <- function(x, y, x_test, y_test, A = NULL, A_full = NULL,
       fit, x_test, predict.all = TRUE, num.threads = 1
     )$predictions |>
       rowMeans()
+    # preds <- rowMeans(preds - 1)
   } else {
     preds <- predict(fit, x_test, num.threads = 1)$predictions
   }
@@ -360,13 +361,13 @@ nerfplus_method_fun <- function(x, y, x_test, y_test, A, A_full,
   aloo_out <- NULL
   if (loo) {
     aloo_out <- nerfplus::get_loo(
-      fit, x = x, x_embed = x_embed, y = y, A = A, 
+      fit, x = x, x_embed = x_embed, y = y, A = A,
       xtest = x_test, xtest_embed = oos_embedding, ytest = y_test, A_full = A_full
     )
     keep_aloo_names <- c(
-      "mean_change_alphas", 
-      "mean_change_betas", 
-      "mean_change_error_test", 
+      "mean_change_alphas",
+      "mean_change_betas",
+      "mean_change_error_test",
       "mean_change_preds_test"
     )
     aloo_out <- aloo_out[keep_aloo_names]
@@ -498,13 +499,13 @@ nerfplus_cv_method_fun <- function(x, y, x_test, y_test, A, A_full,
   aloo_out <- NULL
   if (loo) {
     aloo_out <- nerfplus::get_loo(
-      fit, x = x, x_embed = x_embed, y = y, A = A, 
+      fit, x = x, x_embed = x_embed, y = y, A = A,
       xtest = x_test, xtest_embed = oos_embedding, ytest = y_test, A_full = A_full
     )
     keep_aloo_names <- c(
-      "mean_change_alphas", 
-      "mean_change_betas", 
-      "mean_change_error_test", 
+      "mean_change_alphas",
+      "mean_change_betas",
+      "mean_change_error_test",
       "mean_change_preds_test"
     )
     aloo_out <- aloo_out[keep_aloo_names]
@@ -531,6 +532,112 @@ nerfplus_cv_method_fun <- function(x, y, x_test, y_test, A, A_full,
     return_data = return_data
   )
   out[["loo"]] <- aloo_out
+  return(out)
+}
+
+
+nerfplus_cv_conformal_fun <- function(x, y, x_test, y_test, A, A_full,
+                                      verbose_data_out = NULL,
+                                      classification = FALSE,
+                                      include_netcoh = TRUE,
+                                      lambdas_netcoh = 1,
+                                      lambdas_embed = NULL,
+                                      lambdas_raw = NULL,
+                                      lambdas_stump = 1,
+                                      lambdas_l = 0.05,
+                                      standardize = TRUE,
+                                      embedding = NULL,
+                                      embedding_options = list(
+                                        ndim = 2,
+                                        regularization = 0.5,
+                                        varimax = FALSE,
+                                        center = TRUE,
+                                        scale = TRUE
+                                      ),
+                                      alpha = 0.05,
+                                      return_fit = FALSE,
+                                      return_data = FALSE, ...) {
+  # Note: this function does not work with custom nodeids
+  start_time <- Sys.time()
+  x_orig <- x
+
+  train_idxs <- sort(
+    sample(1:nrow(x), size = floor(nrow(x) / 2), replace = FALSE)
+  )
+  cal_idxs <- sort(setdiff(1:nrow(x), train_idxs))
+  test_idxs <- (nrow(x) + 1):(nrow(x) + nrow(x_test))
+  x_train <- x[train_idxs, , drop = FALSE]
+  y_train <- y[train_idxs]
+  x_cal <- x[cal_idxs, , drop = FALSE]
+  y_cal <- y[cal_idxs]
+  if (is.null(verbose_data_out$nodeids)) {
+    nodeids <- NULL
+    nodeids_cal <- NULL
+    nodeids_test <- NULL
+    A_train <- A[train_idxs, train_idxs]
+    A <- A[c(train_idxs, cal_idxs), c(train_idxs, cal_idxs)]
+    A_full <- A_full[c(train_idxs, cal_idxs, test_idxs), c(train_idxs, cal_idxs, test_idxs)]
+  } else {
+    nodeids <- verbose_data_out$nodeids[train_idxs]
+    nodeids_cal <- verbose_data_out$nodeids[cal_idxs]
+    nodeids_test <- verbose_data_out$nodeids_test
+    A_train <- A
+  }
+
+  if (!is.null(embedding) && !is.character(embedding)) {
+    cal_embedding <- embedding[cal_idxs, , drop = FALSE]
+    test_embedding <- embedding[test_idxs, , drop = FALSE]
+    embedding <- embedding[train_idxs, , drop = FALSE]
+    x_embed <- embedding
+  } else {
+    cal_embedding <- NULL
+    test_embedding <- NULL
+    x_embed <- NULL
+  }
+
+  family <- dplyr::case_when(
+    classification ~ "logistic",
+    TRUE ~ "linear"
+  )
+
+  # fit model
+  fit <- nerfplus::nerfplus_cv(
+    x = x_train, y = y_train, A = A_train, family = family, nodeids = nodeids,
+    include_netcoh = include_netcoh,
+    embedding = embedding, embedding_options = embedding_options,
+    standardize_x = standardize,
+    lambdas_netcoh = lambdas_netcoh, lambdas_embed = lambdas_embed,
+    lambdas_raw = lambdas_raw, lambdas_stump = lambdas_stump, lambdas_l = lambdas_l,
+    ...
+  )
+
+  # do conformal
+  conformal_out <- nerfplus::nerfplus_conformal(
+    fit, x_cal = x_cal, x_cal_embed = cal_embedding, y_cal = y_cal,
+    x_test = x_test, x_test_embed = test_embedding,
+    nodeids_cal = nodeids_cal, nodeids_test = nodeids_test,
+    A_full = A_full, alpha = alpha
+  )
+  # conformal_out |>
+  #   dplyr::mutate(
+  #     is_in_ci = (y_test >= lower_bound) & (y_test <= upper_bound)
+  #   ) |>
+  #   dplyr::summarise(
+  #     coverage = mean(is_in_ci),
+  #     avg_length = mean(upper_bound - lower_bound)
+  #   )
+  end_time <- Sys.time()
+
+  # return values
+  out <- return_method_output(
+    out = NULL, x = x_orig, y = y, x_test = x_test, y_test = y_test,
+    A = A, A_full = A_full, fit = fit, verbose_data_out = verbose_data_out,
+    predictions = conformal_out, classification = classification,
+    importance = NULL, local_importance = NULL,
+    time_elapsed = difftime(end_time, start_time, units = "secs"),
+    return_features = NULL, return_fit = return_fit,
+    return_data = return_data
+  )
   return(out)
 }
 
@@ -814,6 +921,129 @@ network_bart_fun <- function(x, y, x_test, y_test, A, A_full,
     A = A, A_full = A_full, fit = fit, verbose_data_out = verbose_data_out,
     predictions = preds, classification = classification,
     importance = NULL, local_importance = NULL,
+    time_elapsed = difftime(end_time, start_time, units = "secs"),
+    return_features = return_features, return_fit = return_fit,
+    return_data = return_data
+  )
+  return(out)
+}
+
+
+bamdt_method_fun <- function(x, y, x_test, y_test, A, A_full,
+                             verbose_data_out = NULL,
+                             classification = FALSE,
+                             standardize = TRUE,
+                             embedding = NULL,
+                             embedding_options = list(
+                               ndim = 2,
+                               regularization = 0.5,
+                               varimax = FALSE,
+                               center = TRUE,
+                               scale = TRUE
+                             ),
+                             M = 100L,
+                             MCMC = 1000L,
+                             BURNIN = 500L,
+                             THIN = 5L,
+                             projection_seed = 1234L,
+                             fit_seed = 12345L,
+                             nu = 3,
+                             q = 0.9,
+                             alpha = 0.95,
+                             beta = 2,
+                             numcut = 100,
+                             prob_split_by_x = NULL,
+                             return_features = NULL,
+                             return_fit = FALSE,
+                             return_data = FALSE, ...) {
+  if (classification) {
+    stop("BAMDT is currently implemented here for regression only.")
+  }
+
+  start_time <- Sys.time()
+  x_orig <- x
+  x_test_orig <- x_test
+
+  # preprocess data
+  preprocess_out <- preprocess_fun(
+    x = x, x_test = x_test, A = A, A_full = A_full,
+    verbose_data_out = verbose_data_out, standardize = standardize,
+    embedding = embedding, embedding_options = embedding_options
+  )
+  x_orig_colnames <- preprocess_out$x_orig_colnames
+  x <- as.data.frame(preprocess_out$x)
+  x_test <- as.data.frame(preprocess_out$x_test)
+
+  nonconstant <- vapply(
+    x,
+    function(xj) length(unique(xj[!is.na(xj)])) > 1,
+    logical(1)
+  )
+  if (!all(nonconstant)) {
+    x <- x[, nonconstant, drop = FALSE]
+    x_test <- x_test[, nonconstant, drop = FALSE]
+  }
+
+  M <- as.integer(M)
+  MCMC <- as.integer(MCMC)
+  BURNIN <- as.integer(BURNIN)
+  THIN <- as.integer(THIN)
+  if (M < 1) {
+    stop("M must be positive")
+  }
+  if (MCMC <= BURNIN) {
+    stop("MCMC must be greater than BURNIN")
+  }
+  if (THIN < 1 || (MCMC - BURNIN) %% THIN != 0) {
+    stop("THIN must evenly divide MCMC - BURNIN")
+  }
+
+  n_train <- nrow(x)
+  n_test <- nrow(x_test)
+  p <- ncol(x)
+  if (is.null(prob_split_by_x)) {
+    prob_split_by_x <- min(p / (p + 2), 0.85)
+  }
+
+  adj_out <- bamdt_order_adjacencies(
+    A = A, A_full = A_full,
+    n_train = n_train, n_test = n_test,
+    verbose_data_out = verbose_data_out
+  )
+  graph_train <- bamdt_adjacency_to_graph(adj_out$A, "A")
+
+  hyperpar <- c()
+  hyperpar["sigmasq_mu"] <- (0.5 / (2 * sqrt(M)))^2
+  hyperpar["q"] <- q
+  hyperpar["nu"] <- nu
+  hyperpar["M"] <- M
+  hyperpar["alpha"] <- alpha
+  hyperpar["beta"] <- beta
+  hyperpar["numcut"] <- numcut
+  hyperpar["prob_split_by_x"] <- prob_split_by_x
+
+  graphs <- rep(list(graph_train), M)
+  projections <- matrix(rep(seq_len(n_train), M), nrow = n_train, ncol = M)
+  storage.mode(projections) <- "numeric"
+  projections_test <- bamdt_nearest_train_projections(
+    adj_out$A_full, n_train, n_test, M, projection_seed
+  )
+  storage.mode(projections_test) <- "numeric"
+  init_val <- list(sigmasq_y = max(stats::var(as.numeric(y)), .Machine$double.eps))
+
+  fit <- Model$new(
+    as.numeric(y), x, graphs, projections, hyperpar, x_test, projections_test
+  )
+  fit$Fit(init_val, MCMC, BURNIN, THIN, seed = fit_seed)
+  preds <- colMeans(fit$Y_new_out)
+  feature_importance <- colMeans(fit$importance_out)
+  end_time <- Sys.time()
+
+  out <- return_method_output(
+    out = NULL, x = x_orig, y = y, x_test = x_test_orig, y_test = y_test,
+    A = A, A_full = A_full, fit = fit, verbose_data_out = verbose_data_out,
+    predictions = preds, classification = classification,
+    importance = feature_importance, local_importance = NULL,
     time_elapsed = difftime(end_time, start_time, units = "secs"),
     return_features = return_features, return_fit = return_fit,
     return_data = return_data

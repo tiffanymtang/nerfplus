@@ -115,6 +115,23 @@ nerfplus_cohesion_only_method <- create_method(
   return_data = return_data
 )
 
+nerfplus_conformal_method <- create_method(
+  .method_fun = nerfplus_cv_conformal_fun,
+  .name = "NeRF+ Conformal",
+  classification = classification,
+  include_netcoh = TRUE,
+  ntrees_cv = ntrees_cv,
+  lambdas_netcoh = lambdas_netcoh,
+  lambdas_embed = lambdas_embed,
+  lambdas_raw = lambdas_raw,
+  lambdas_stump = lambdas_stump,
+  lambdas_l = lambdas_l,
+  embedding = embedding,
+  embedding_options = embedding_options,
+  return_fit = return_fit,
+  return_data = return_data
+)
+
 # Other Network-assisted Models
 rnc_method <- create_method(
   .method_fun = rnc_cv_method_fun,
@@ -135,6 +152,47 @@ network_bart_method <- create_method(
   .method_fun = network_bart_fun,
   .name = "Network BART",
   classification = classification,
+  return_features = return_features,
+  return_fit = return_fit,
+  return_data = return_data
+)
+
+bamdt_method <- create_method(
+  .method_fun = bamdt_method_fun,
+  .name = "BAMDT (prob_x = 0.85)",
+  classification = classification,
+  M = 200,
+  MCMC = 2000,
+  BURNIN = 1000,
+  THIN = 1,
+  return_features = return_features,
+  return_fit = return_fit,
+  return_data = return_data
+)
+
+bamdt_method2 <- create_method(
+  .method_fun = bamdt_method_fun,
+  .name = "BAMDT (prob_x = 0.5)",
+  classification = classification,
+  M = 200,
+  MCMC = 2000,
+  BURNIN = 1000,
+  THIN = 1,
+  prob_split_by_x = 0.5,
+  return_features = return_features,
+  return_fit = return_fit,
+  return_data = return_data
+)
+
+bamdt_method3 <- create_method(
+  .method_fun = bamdt_method_fun,
+  .name = "BAMDT (prob_x = 0.15)",
+  classification = classification,
+  M = 200,
+  MCMC = 2000,
+  BURNIN = 1000,
+  THIN = 1,
+  prob_split_by_x = 0.15,
   return_features = return_features,
   return_fit = return_fit,
   return_data = return_data

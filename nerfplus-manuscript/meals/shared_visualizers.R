@@ -2,6 +2,9 @@ method_levels <- c(
   "NeRF+",
   "RNC",
   "Network BART",
+  "BAMDT",
+  "BAMDT2",
+  "BAMDT3",
   "RF+",
   "Linear Regression",
   "BART",
@@ -13,6 +16,9 @@ method_levels_all <- c(
   "NeRF+ (Embedding Only)",
   "RNC",
   "Network BART",
+  "BAMDT",
+  "BAMDT2",
+  "BAMDT3",
   "RF+",
   "Linear Regression",
   "BART",
@@ -24,8 +30,11 @@ COLORS <- c(
   "NeRF+ (Embedding Only)" = "#FF9301",
   "RNC" = "#DE68A1",
   "Network BART" = "#68A65E",
+  "BAMDT" = "#95B88F",
+  "BAMDT2" = "#95B88F",
+  "BAMDT3" = "#95B88F",
   "RF+" = "black",
-  "Linear Regression" = "#DE68A1",  
+  "Linear Regression" = "#DE68A1",
   "BART" = "#68A65E",
   "RF" = "grey"
 )
@@ -35,6 +44,9 @@ LINETYPES <- c(
   "NeRF+ (Embedding Only)" = "solid",
   "RNC" = "solid",
   "Network BART" = "solid",
+  "BAMDT" = "solid",
+  "BAMDT2" = "dashed",
+  "BAMDT3" = "dotted",
   "RF+" = "dashed",
   "Linear Regression" = "dashed",
   "BART" = "dashed",
@@ -80,7 +92,7 @@ pred_err_plot <- create_visualizer(
     ggplot2::scale_linetype_manual(breaks = names(LINETYPES), values = LINETYPES),
     ggplot2::labs(
       x = vary_param_lab,
-      y = "Mean Test R-squared", 
+      y = "Mean Test R-squared",
       linetype = "Method"
     ),
     vthemes::theme_vmodern(size_preset = "large"),
@@ -144,7 +156,7 @@ philly_crime_pred_err_plot <- create_visualizer(
     ggplot2::scale_linetype_manual(breaks = names(LINETYPES), values = LINETYPES),
     ggplot2::labs(
       x = "Training Proportion",
-      y = "R-squared", 
+      y = "R-squared",
       linetype = "Method"
     ),
     vthemes::theme_vmodern(size_preset = "large"),
@@ -183,7 +195,7 @@ permute_fi_plot <- create_visualizer(
       )
     ),
     ggplot2::labs(
-      x = "Feature", 
+      x = "Feature",
       y = "Permutation Importance",
       fill = vary_param_lab,
       color = vary_param_lab
@@ -238,7 +250,7 @@ school_conflict_permute_fi_plot <- create_visualizer(
     ggplot2::scale_color_manual(values = NETWORK_COLORS),
     ggplot2::scale_fill_manual(values = NETWORK_COLORS),
     ggplot2::labs(
-      x = "Feature", 
+      x = "Feature",
       y = "Permutation Importance"
     ),
     vthemes::theme_vmodern(size_preset = "medium"),
@@ -324,4 +336,16 @@ philly_crime_lfi_plot <- create_visualizer(
 influence_outliers_plot <- create_visualizer(
   .viz_fun = plot_influence_outliers,
   .name = "Sample Influence with Outliers Plot"
+)
+
+#### Conformal Visualizer ###
+conformal_coverage_plot <- create_visualizer(
+  .viz_fun = plot_eval_constructor,
+  .name = "Conformal Coverage Plot",
+  eval_names = 'Conformal Coverage',
+  eval_id = "coverage",
+  show = c("point", "errorbar"),
+  y_str = "mean_coverage",
+  err_sd_str = "se_coverage",
+  .doc_options = list(width = 12, height = 4)
 )

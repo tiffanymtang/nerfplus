@@ -1,56 +1,25 @@
-# sh driver_school_conflict.sh
-
 rm(list = ls())
-library(optparse)
-
 EXP_NAME <- "Philly Crime (Predictions)"
-SAVE <- TRUE
-USE_CACHED <- TRUE
-TRAIN_PROP <- 0.75
-CHECKPOINT_N_REPS <- 0
 set.seed(331)
-
-option_list <- list(
-  make_option(
-    "--subsample", type = "numeric", default = 0.01,
-    help = "subsampling proportion"
-  ),
-  make_option(
-    "--split_mode", type = "character", default = "random",
-    help = "split mode: 'random', 'time', or 'location'"
-  ),
-  make_option(
-    "--include_weather", action = "store_true", default = FALSE,
-    help = "include weather covariates"
-  )
-)
-# parse the command line options
-opt_parser <- OptionParser(option_list = option_list)
-opt <- parse_args(opt_parser)
-str(opt)
-
+here::i_am(file.path("meals", "06a_philly_crime_predictions.R"))
 source(here::here(file.path("meals", "setup.R")))
-N_REPS <- 100
-
-# #### Cluster setup for parallelization (or comment out) ####
-# # n_workers <- min(N_REPS, availableCores() - 1)
-# n_workers <- 8
-# plan(multisession, workers = n_workers)
 
 #### DGPs ####
 source(here::here(file.path("meals", "shared_dgp_params_default.R")))
 source(here::here(file.path("meals", "shared_dgps.R")))
 
 dgp_name <- sprintf(
-  "Philly Crime (%s%s, %s)",
+  "Philly Crime (%s%s%s, %s)",
   opt$split_mode,
   ifelse(opt$include_weather, ", with weather", ""),
+  ifelse(opt$weighted_network, ", weighted network", ""),
   opt$subsample
 )
 dgp <- create_dgp(
-  load_philly_crime_data, .name = dgp_name, train_prop = TRAIN_PROP,
+  load_philly_crime_data, .name = dgp_name, train_prop = opt$train_prop,
   subsample = opt$subsample, split_mode = opt$split_mode,
-  include_weather = opt$include_weather, test_all = TRUE
+  include_weather = opt$include_weather, weighted = opt$weighted_network, 
+  test_all = TRUE
 )
 data_list <- dgp$generate()
 
@@ -85,10 +54,7 @@ out <- run_experiment(
   use_cached = USE_CACHED, checkpoint_n_reps = CHECKPOINT_N_REPS,
   future.globals = FUTURE_GLOBALS, future.packages = FUTURE_PACKAGES
 )
-export_visualizers(philly_crime_experiment)
-file.remove(
-  file.path(philly_crime_experiment$get_save_dir(), "experiment_cached_params.rds")
-)
-file.remove(
-  file.path(philly_crime_experiment$get_save_dir(), "viz_results.rds")
-)
+# export_visualizers(philly_crime_experiment)
+# file.remove(
+#   file.path(philly_crime_experiment$get_save_dir(), "experiment_cached_params.rds")
+# )

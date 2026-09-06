@@ -7,7 +7,8 @@ linear_additive_blockwise_network_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   centroids_scale = centroids_scale,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 lss_additive_blockwise_network_dgp <- create_dgp(
@@ -18,7 +19,8 @@ lss_additive_blockwise_network_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   centroids_scale = centroids_scale,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 poly_additive_blockwise_network_dgp <- create_dgp(
@@ -29,7 +31,8 @@ poly_additive_blockwise_network_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   centroids_scale = centroids_scale,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 linear_network_autocorrelation_dgp <- create_dgp(
@@ -40,7 +43,8 @@ linear_network_autocorrelation_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   omega = omega,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 lss_network_autocorrelation_dgp <- create_dgp(
@@ -51,7 +55,8 @@ lss_network_autocorrelation_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   omega = omega,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 poly_network_autocorrelation_dgp <- create_dgp(
@@ -62,7 +67,41 @@ poly_network_autocorrelation_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   omega = omega,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
+)
+
+logistic_additive_blockwise_network_dgp <- create_dgp(
+  .dgp_fun = additive_blockwise_network_logistic_dgp_fun,
+  .name = "Logistic Additive Blockwise Network DGP",
+  n = num_samples, p = num_features,
+  f = f_linear, s = s, beta = beta_linear,
+  network_fun = network_fun,
+  network_args = list(K = K, pw = pw, pb = pb),
+  centroids_scale = centroids_scale,
+  train_prop = train_prop
+)
+
+logistic_lss_additive_blockwise_network_dgp <- create_dgp(
+  .dgp_fun = additive_blockwise_network_logistic_dgp_fun,
+  .name = "Logistic LSS Additive Blockwise Network DGP",
+  n = num_samples, p = num_features,
+  f = f_lss, m = m_lss, k = k_lss, beta = beta_lss,
+  network_fun = network_fun,
+  network_args = list(K = K, pw = pw, pb = pb),
+  centroids_scale = centroids_scale,
+  train_prop = train_prop
+)
+
+logistic_poly_additive_blockwise_network_dgp <- create_dgp(
+  .dgp_fun = additive_blockwise_network_logistic_dgp_fun,
+  .name = "Logistic Polynomial Additive Blockwise Network DGP",
+  n = num_samples, p = num_features,
+  f = f_hier_poly, m = m_poly, k = k_poly, beta = beta_poly,
+  network_fun = network_fun,
+  network_args = list(K = K, pw = pw, pb = pb),
+  centroids_scale = centroids_scale,
+  train_prop = train_prop
 )
 
 # Main Simulations with Real Data for X
@@ -75,7 +114,8 @@ linear_additive_blockwise_network_real_data_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   centroids_scale = centroids_scale,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 lss_additive_blockwise_network_real_data_dgp <- create_dgp(
@@ -87,7 +127,8 @@ lss_additive_blockwise_network_real_data_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   centroids_scale = centroids_scale,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 poly_additive_blockwise_network_real_data_dgp <- create_dgp(
@@ -99,7 +140,8 @@ poly_additive_blockwise_network_real_data_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   centroids_scale = centroids_scale,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 linear_network_autocorrelation_real_data_dgp <- create_dgp(
@@ -111,7 +153,8 @@ linear_network_autocorrelation_real_data_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   omega = omega,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 lss_network_autocorrelation_real_data_dgp <- create_dgp(
@@ -123,7 +166,8 @@ lss_network_autocorrelation_real_data_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   omega = omega,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 poly_network_autocorrelation_real_data_dgp <- create_dgp(
@@ -135,7 +179,8 @@ poly_network_autocorrelation_real_data_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   omega = omega,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 # Main Simulations with Real Data for X (small version)
@@ -148,7 +193,8 @@ linear_additive_blockwise_network_real_data_small_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   centroids_scale = centroids_scale,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 lss_additive_blockwise_network_real_data_small_dgp <- create_dgp(
@@ -160,7 +206,8 @@ lss_additive_blockwise_network_real_data_small_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   centroids_scale = centroids_scale,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 poly_additive_blockwise_network_real_data_small_dgp <- create_dgp(
@@ -172,7 +219,8 @@ poly_additive_blockwise_network_real_data_small_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   centroids_scale = centroids_scale,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 linear_network_autocorrelation_real_data_small_dgp <- create_dgp(
@@ -184,7 +232,8 @@ linear_network_autocorrelation_real_data_small_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   omega = omega,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 lss_network_autocorrelation_real_data_small_dgp <- create_dgp(
@@ -196,7 +245,8 @@ lss_network_autocorrelation_real_data_small_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   omega = omega,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 poly_network_autocorrelation_real_data_small_dgp <- create_dgp(
@@ -208,7 +258,8 @@ poly_network_autocorrelation_real_data_small_dgp <- create_dgp(
   network_fun = network_fun,
   network_args = list(K = K, pw = pw, pb = pb),
   omega = omega,
-  pve = pve
+  pve = pve,
+  train_prop = train_prop
 )
 
 # Main Simulations with Outliers
@@ -221,7 +272,8 @@ linear_additive_blockwise_network_outliers_dgp <- create_dgp(
   network_args = list(K = K, pw = pw, pb = pb),
   centroids_scale = centroids_scale,
   pve = pve,
-  n_outliers = n_outliers, outliers_scale = outliers_scale
+  n_outliers = n_outliers, outliers_scale = outliers_scale,
+  train_prop = train_prop
 )
 
 lss_additive_blockwise_network_outliers_dgp <- create_dgp(
@@ -233,7 +285,8 @@ lss_additive_blockwise_network_outliers_dgp <- create_dgp(
   network_args = list(K = K, pw = pw, pb = pb),
   centroids_scale = centroids_scale,
   pve = pve,
-  n_outliers = n_outliers, outliers_scale = outliers_scale
+  n_outliers = n_outliers, outliers_scale = outliers_scale,
+  train_prop = train_prop
 )
 
 poly_additive_blockwise_network_outliers_dgp <- create_dgp(
@@ -245,7 +298,8 @@ poly_additive_blockwise_network_outliers_dgp <- create_dgp(
   network_args = list(K = K, pw = pw, pb = pb),
   centroids_scale = centroids_scale,
   pve = pve,
-  n_outliers = n_outliers, outliers_scale = outliers_scale
+  n_outliers = n_outliers, outliers_scale = outliers_scale,
+  train_prop = train_prop
 )
 
 linear_network_autocorrelation_outliers_dgp <- create_dgp(
@@ -257,7 +311,8 @@ linear_network_autocorrelation_outliers_dgp <- create_dgp(
   network_args = list(K = K, pw = pw, pb = pb),
   omega = omega,
   pve = pve,
-  n_outliers = n_outliers, outliers_scale = outliers_scale
+  n_outliers = n_outliers, outliers_scale = outliers_scale,
+  train_prop = train_prop
 )
 
 lss_network_autocorrelation_outliers_dgp <- create_dgp(
@@ -269,7 +324,8 @@ lss_network_autocorrelation_outliers_dgp <- create_dgp(
   network_args = list(K = K, pw = pw, pb = pb),
   omega = omega,
   pve = pve,
-  n_outliers = n_outliers, outliers_scale = outliers_scale
+  n_outliers = n_outliers, outliers_scale = outliers_scale,
+  train_prop = train_prop
 )
 
 poly_network_autocorrelation_outliers_dgp <- create_dgp(
@@ -281,5 +337,6 @@ poly_network_autocorrelation_outliers_dgp <- create_dgp(
   network_args = list(K = K, pw = pw, pb = pb),
   omega = omega,
   pve = pve,
-  n_outliers = n_outliers, outliers_scale = outliers_scale
+  n_outliers = n_outliers, outliers_scale = outliers_scale,
+  train_prop = train_prop
 )

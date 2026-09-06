@@ -42,6 +42,9 @@ evaluate_fi <- function(object, x, y = NULL, A_full = NULL, nodeids = NULL,
       metric <- yardstick::roc_auc_vec
     }
   }
+  if (classification && !is.factor(y)) {
+    y <- factor(y, levels = c(1, 0))
+  }
 
   if (is.null(x_means)) {
     x_means <- apply(x, 2, mean)

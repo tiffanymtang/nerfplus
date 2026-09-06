@@ -144,7 +144,7 @@ return_method_output <- function(out, x, y, x_test, y_test, A, A_full, fit,
   out[["time_elapsed"]] <- time_elapsed
   if (!is.null(return_features)) {
     for (feature in return_features) {
-      out[[feature]] <- x_test_orig[[feature]]
+      out[[feature]] <- x_test[[feature]]
     }
   }
   if (return_fit) {

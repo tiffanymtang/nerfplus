@@ -12,6 +12,9 @@
 #' @param X_sd Standard deviation of the features.
 #' @param err_sd Standard deviation of the errors. Ignored if `pve` is provided.
 #' @param pve Proportion of variance explained (optional).
+#' @param n_outliers Number of outliers to add to the response variable (default is 0).
+#' @param outliers_scale Scale of the outliers in terms of standard deviations of `y` (default is 3).
+#' @param n_per_node Number of samples per node in the network (default is 1).
 #' @param train_prop Proportion of data to use for training (default is 0.8).
 #' @param return_details Logical indicating if additional details should be
 #'   returned (default is FALSE).
@@ -26,6 +29,7 @@ additive_blockwise_network_dgp_fun <- function(n, p, f, x_fun = NULL,
                                                X_sd = 1,
                                                err_sd = 1, pve = NULL,
                                                n_outliers = 0, outliers_scale = 3,
+                                               n_per_node = 1,
                                                train_prop = 0.8,
                                                return_details = FALSE, ...) {
 
@@ -38,13 +42,17 @@ additive_blockwise_network_dgp_fun <- function(n, p, f, x_fun = NULL,
   X <- scale(X, center = TRUE, scale = FALSE)
 
   # generate network
-  network <- R.utils::doCall(network_fun, args = c(list(n = n), network_args))
+  network <- R.utils::doCall(network_fun, args = c(list(n = round(n / n_per_node)), network_args))
   A <- network$A
-  block_ids <- network$block_ids
+  block_ids <- rep(network$block_ids, length.out = n)
+  if (n_per_node > 1) {
+    nodeids <- rep(1:round(n / n_per_node), length.out = n)
+  } else {
+    nodeids <- NULL
+  }
 
   # generate alphas
   alphas <- generate_alphas(block_ids = block_ids, scale = centroids_scale)
-  centroids <- sort(unique(alphas))
 
   # generate y
   y <- alphas + f(X, ...)
@@ -60,11 +68,14 @@ additive_blockwise_network_dgp_fun <- function(n, p, f, x_fun = NULL,
 
   if (return_details) {
     out <- load_data(
-      X = X, y = y, A = A, alphas = alphas, block_ids = block_ids,
-      train_prop = train_prop
+      X = X, y = y, A = A,
+      alphas = alphas, block_ids = block_ids, nodeids = nodeids,
+      train_prop = train_prop,
     )
   } else {
-    out <- load_data(X = X, y = y, A = A, train_prop = train_prop)
+    out <- load_data(
+      X = X, y = y, A = A, nodeids = nodeids, train_prop = train_prop
+    )
   }
 
   # add outliers (if specified)
@@ -154,6 +165,67 @@ network_autocorrelation_dgp_fun <- function(n, p, f, x_fun = NULL,
       TRUE ~ out$y[1:n_outliers] - outliers_scale * y_sd
     )
     out$verbose_data_out$outlier_idxs <- 1:n_outliers
+  }
+
+  return(out)
+}
+
+
+#' Simulate from additive blockwise network DGP with logistic (binary) response
+#'
+#' @param n Number of samples.
+#' @param p Number of features.
+#' @param f A function that takes a matrix X and additional arguments
+#' @param x_fun Function to generate the features X. If NULL, X is generated
+#'   from a standard normal distribution.
+#' @param network_fun Function to generate the network adjacency matrix.
+#' @param network_args A list of additional arguments to pass to the
+#'   network function.
+#' @param centroids_scale Scale of the centroids for each block.
+#' @param X_sd Standard deviation of the features.
+#' @param train_prop Proportion of data to use for training (default is 0.8).
+#' @param return_details Logical indicating if additional details should be
+#'   returned (default is FALSE).
+#' @param ... Additional arguments to pass to the function `f`.
+#'
+#' @returns A list containing the training and test data, the adjacency matrix
+#'   `A`, the full adjacency matrix `A_full`, and optionally the alphas and
+#'   block IDs if `return_details = TRUE`.
+additive_blockwise_network_logistic_dgp_fun <- function(n, p, f, x_fun = NULL,
+                                                        network_fun, network_args = NULL,
+                                                        centroids_scale = 1,
+                                                        X_sd = 1,
+                                                        train_prop = 0.8,
+                                                        return_details = FALSE, ...) {
+
+  # generate X
+  if (is.null(x_fun)) {
+    X <- matrix(rnorm(n * p, mean = 0, sd = X_sd), nrow = n, ncol = p)
+  } else {
+    X <- x_fun(n, p)
+  }
+  X <- scale(X, center = TRUE, scale = FALSE)
+
+  # generate network
+  network <- R.utils::doCall(network_fun, args = c(list(n = n), network_args))
+  A <- network$A
+  block_ids <- network$block_ids
+
+  # generate alphas
+  alphas <- generate_alphas(block_ids = block_ids, scale = centroids_scale)
+
+  # generate y
+  prob <- alphas + f(X, ...)
+  prob <- 1 / (1 + exp(-prob))
+  y <- rbinom(n, size = 1, prob = prob)
+
+  if (return_details) {
+    out <- load_data(
+      X = X, y = y, A = A, alphas = alphas, block_ids = block_ids,
+      train_prop = train_prop
+    )
+  } else {
+    out <- load_data(X = X, y = y, A = A, train_prop = train_prop)
   }
 
   return(out)
@@ -290,6 +362,7 @@ load_philly_crime_data <- function(data_dir = here::here("data/philly_crime"),
                                    keep_tract_var = FALSE,
                                    include_weather = TRUE,
                                    split_mode = c("time", "random", "location"),
+                                   weighted = FALSE,
                                    subsample = 1,
                                    train_prop = 0.8,
                                    test_all = TRUE) {
@@ -332,6 +405,7 @@ load_philly_crime_data <- function(data_dir = here::here("data/philly_crime"),
     dplyr::select(-y)
   Y_all <- c(scale(crime_data$y[!na_idx], center = TRUE, scale = FALSE))
   vertex_id_all <- vertex_id_all[!na_idx]
+  bart_latlon_df_all <- bart_latlon_df_all[!na_idx, ]
 
   if (!include_weather) {
     X <- X |>
@@ -369,6 +443,23 @@ load_philly_crime_data <- function(data_dir = here::here("data/philly_crime"),
   } else {
     X_in <- X
     X_out <- NULL
+  }
+
+  if (weighted) {
+    sf_points_df <- data.frame(
+      id = vertex_id_all,
+      lat = bart_latlon_df_all$lat,
+      lon = bart_latlon_df_all$lon
+    ) |>
+      dplyr::distinct() |>
+      dplyr::arrange(id) |>
+      sf::st_as_sf(coords = c("lon", "lat"), crs = 4326)
+    A_distances <- sf::st_distance(sf_points_df) |>
+      units::set_units("km") |>
+      units::drop_units()
+    # TODO: consider smaller bandwidths
+    bandwidth <- quantile(A_distances[A_distances > 0], 0.05)
+    A_tract <- exp(-(A_distances^2) / (2 * bandwidth^2))
   }
 
   rownames(A_tract) <- 1:nrow(A_tract)
@@ -429,6 +520,11 @@ load_philly_crime_data <- function(data_dir = here::here("data/philly_crime"),
   igraph::E(g)$eid <- as.integer(1:igraph::ecount(g))  # edge id
   igraph::E(g)$weight <- 1
   igraph::V(g)$vid <- as.integer(1:igraph::vcount(g))  # vertex id
+
+  if (weighted) {
+    diag(A_train) <- rep(0, nrow(A_train))
+    diag(A_full) <- rep(0, nrow(A_full))
+  }
 
   out <- list(
     x = X_train,

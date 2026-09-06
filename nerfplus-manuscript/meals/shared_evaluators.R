@@ -4,7 +4,7 @@ true_pred_col <- "y_test"
 est_pred_col <- "predictions"
 
 pred_err_eval <- create_evaluator(
-  .eval_fun = summarize_pred_err,
+  .eval_fun = summarize_pred_err_wrapper,
   .name = 'Prediction Accuracy',
   nested_cols = nested_pred_cols,
   truth_col = true_pred_col,
@@ -15,7 +15,7 @@ pred_err_eval <- create_evaluator(
 )
 
 philly_crime_pred_err_eval <- create_evaluator(
-  .eval_fun = summarize_pred_err,
+  .eval_fun = summarize_pred_err_wrapper,
   .name = 'Prediction Accuracy',
   nested_cols = nested_pred_cols,
   truth_col = true_pred_col,
@@ -31,6 +31,7 @@ nested_feature_cols <- "importance"
 feature_col <- "var"
 permute_col <- "permute"
 mdiplus_col <- "mdi+"
+bamdt_col <- "importance"
 
 permute_fi_eval <- create_evaluator(
   .eval_fun = summarize_feature_importance_with_null,
@@ -48,3 +49,13 @@ permute_fi_eval <- create_evaluator(
 mdiplus_fi_eval <- permute_fi_eval$clone()
 mdiplus_fi_eval$name <- 'MDI+ Feature Importances'
 mdiplus_fi_eval$eval_params$imp_col <- mdiplus_col
+
+bamdt_fi_eval <- permute_fi_eval$clone()
+bamdt_fi_eval$name <- 'BAMDT Feature Importances'
+bamdt_fi_eval$eval_params$imp_col <- bamdt_col
+
+#### Conformal Prediction Evaluators ####
+conformal_eval <- create_evaluator(
+  .eval_fun = summarize_conformal_coverage,
+  .name = 'Conformal Coverage'
+)

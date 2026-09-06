@@ -45,11 +45,16 @@ get_vary_param_name <- function(exp_name) {
   )
 }
 
-get_exp_dir <- function(exp_name) {
-  vary_param_name <- get_vary_param_name(exp_name)
+get_exp_dir <- function(exp_name, with_pve = TRUE, vary_param_name = NULL,
+                        embedding_type = "laplacian", embedding_ndim = "2",
+                        embedding_reg = 0.05, root_dir = "Main Simulations") {
+  if (is.null(vary_param_name)) {
+    vary_param_name <- get_vary_param_name(exp_name)
+  }
   file.path(
-    RESULTS_DIR, "Main Simulations", exp_name,
-    sprintf("Varying %s-pve", vary_param_name)
+    RESULTS_DIR, root_dir,
+    sprintf("%s_%s_%s", embedding_type, embedding_ndim, embedding_reg),
+    exp_name, sprintf("Varying %s%s", vary_param_name, ifelse(with_pve, "-pve", ""))
   )
 }
 
@@ -65,8 +70,21 @@ METHOD_LEVELS <- c(
   "NeRF+",
   "NeRF+ (Cohesion Only)",
   "NeRF+ (Embedding Only)",
+  "NeRF+ (laplacian)",
+  "NeRF+ (adjacency)",
+  "NeRF+ (laplacian_adjacency)",
+  "NeRF+ (Laplacian 1)",
+  "NeRF+ (Laplacian 2)",
+  "NeRF+ (Laplacian 3)",
+  "NeRF+ (Laplacian 5)",
+  "NeRF+ (lambda = 0.01)",
+  "NeRF+ (lambda = 0.05)",
+  "NeRF+ (lambda = 0.1)",
   "RNC",
   "Network BART",
+  "BAMDT (prob_x = 0.85)",
+  "BAMDT (prob_x = 0.5)",
+  "BAMDT (prob_x = 0.15)",
   "RF+",
   "Linear Regression",
   "BART"
@@ -75,6 +93,9 @@ KEEP_METHODS <- c(
   "NeRF+" = "NeRF+",
   "RNC" = "RNC",
   "Network BART" = "Network BART",
+  "BAMDT (prob_x = 0.85)" = "BAMDT (prob_x = 0.85)",
+  "BAMDT (prob_x = 0.5)" = "BAMDT (prob_x = 0.5)",
+  "BAMDT (prob_x = 0.15)" = "BAMDT (prob_x = 0.15)",
   "RF+" = "RF+",
   "Linear Regression" = "Linear",
   "BART" = "BART"
@@ -83,6 +104,9 @@ COLORS <- c(
   "NeRF+" = "black",
   "RNC" = "#DE68A1",
   "Network BART" = "#68A65E",
+  "BAMDT (prob_x = 0.85)" = "#8C9C8C",
+  "BAMDT (prob_x = 0.5)" = "#8C9C8C",
+  "BAMDT (prob_x = 0.15)" = "#8C9C8C",
   "RF+" = "black",
   "Linear Regression" = "#DE68A1",
   "BART" = "#68A65E",
@@ -95,6 +119,9 @@ LINETYPES <- c(
   "NeRF+" = "solid",
   "RNC" = "solid",
   "Network BART" = "solid",
+  "BAMDT (prob_x = 0.85)" = "solid",
+  "BAMDT (prob_x = 0.5)" = "dashed",
+  "BAMDT (prob_x = 0.15)" = "dotted",
   "RF+" = "dashed",
   "Linear Regression" = "dashed",
   "BART" = "dashed",
@@ -114,25 +141,47 @@ DGP_LABS <- list(
   "Linear Network Autocorrelation with Real Data DGP" = "Linear",
   "Polynomial Network Autocorrelation with Real Data DGP" = "Polynomial"
 )
-facet_labeller <- function(variable, value) {
-  if (variable == ".dgp_name") {
-    return(DGP_LABS[as.character(value)])
-  } else if (variable == ".fi_mode") {
-    return(stringr::str_replace_all(value, " ", "\n"))
-  } else if (variable == "pve") {
-    return(paste("PVE =", value))
-  } else {
-    return(value)
-  }
+
+facet_labeller <- function(labels) {
+  labels[] <- lapply(names(labels), function(variable) {
+    value <- labels[[variable]]
+
+    if (variable == ".dgp_name") {
+      DGP_LABS[as.character(value)]
+
+    } else if (variable == ".fi_mode") {
+      stringr::str_replace_all(value, " ", "\n")
+
+    } else if (variable == "pve") {
+      paste("PVE =", value)
+
+    } else {
+      value
+    }
+  })
+
+  labels
 }
-facet_labeller_abbrv <- function(variable, value) {
-  if (variable == ".dgp_name") {
-    value <- DGP_LABS[as.character(value)] |>
-      stringr::str_replace("Locally Spiky Sparse", "LSS")
-    return(value)
-  } else {
-    return(facet_labeller(variable, value))
-  }
+
+facet_labeller_abbrv <- function(labels) {
+  labels[] <- lapply(names(labels), function(variable) {
+    value <- labels[[variable]]
+
+    if (variable == ".dgp_name") {
+      DGP_LABS[as.character(value)] |>
+        stringr::str_replace("Locally Spiky Sparse", "LSS")
+
+    } else if (variable == ".fi_mode") {
+      stringr::str_replace_all(value, " ", "\n")
+
+    } else if (variable == "pve") {
+      paste("PVE =", value)
+
+    } else {
+      value
+    }
+  })
+  labels
 }
 
 legend_key_width <- 1.9
@@ -140,6 +189,16 @@ legend_key_width <- 1.9
 ###########################################################################
 ######################### Main Simulation Results #########################
 ###########################################################################
+# exp_name <- EXP_NAMES_MAIN[1]
+# vary_param_name <- get_vary_param_name(exp_name)
+# exp_dir <- get_exp_dir(exp_name)
+# fit_results <- readRDS(file.path(exp_dir, "fit_results.rds"))
+# fit_results |>
+#   dplyr::group_by(.method_name) |>
+#   dplyr::summarise(
+#     time_elapsed = mean(unlist(time_elapsed))
+#   )
+
 eval_results_ls <- purrr::map(
   EXP_NAMES_MAIN,
   function(exp_name) {
@@ -171,84 +230,90 @@ pred_results_df <- purrr::map(eval_results_ls, "Prediction Accuracy") |>
 
 ## Main Prediction Accuracy Plot (use pve = 0.4)
 metric_val <- "rsq"
-for (pve_val in unique(pred_results_df$pve)) {
-  plt_ls <- pred_results_df |>
-    dplyr::group_by(
-      .dgp_mode
-    ) |>
-    dplyr::group_map(
-      .f = function(.x, .y) {
-        dgp_mode <- .y$.dgp_mode[[1]]
-        if (stringr::str_detect(dgp_mode, "Blockwise")) {
-          xlab <- expression(
-            bold(paste("Network Effect (", eta, ")"))
-          )
-          tag <- sprintf("(A) %s", dgp_mode)
-        } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
-          xlab <- expression(
-            bold(paste("Network Effect (", omega, ")"))
-          )
-          tag <- sprintf("(B) %s", dgp_mode)
-        }
-        .x |>
-          dplyr::filter(
-            pve == !!pve_val,
-            .metric == !!metric_val,
-            .method_name %in% names(KEEP_METHODS)
-          ) |>
-          ggplot2::ggplot() +
-          ggplot2::aes(
-            x = .vary_param,
-            y = mean_pred_err,
-            color = .method_name,
-            linetype = .method_name
-          ) +
-          ggplot2::geom_ribbon(
+for (metric_val in c("rsq", "rmse")) {
+  ylab <- dplyr::case_when(
+    metric_val == "rsq" ~ "R-squared",
+    metric_val == "rmse" ~ "RMSE"
+  )
+  for (pve_val in unique(pred_results_df$pve)) {
+    plt_ls <- pred_results_df |>
+      dplyr::group_by(
+        .dgp_mode
+      ) |>
+      dplyr::group_map(
+        .f = function(.x, .y) {
+          dgp_mode <- .y$.dgp_mode[[1]]
+          if (stringr::str_detect(dgp_mode, "Blockwise")) {
+            xlab <- expression(
+              bold(paste("Network Effect (", eta, ")"))
+            )
+            tag <- sprintf("(A) %s", dgp_mode)
+          } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+            xlab <- expression(
+              bold(paste("Network Effect (", omega, ")"))
+            )
+            tag <- sprintf("(B) %s", dgp_mode)
+          }
+          .x |>
+            dplyr::filter(
+              pve == !!pve_val,
+              .metric == !!metric_val,
+              .method_name %in% names(KEEP_METHODS)
+            ) |>
+            ggplot2::ggplot() +
             ggplot2::aes(
               x = .vary_param,
-              ymin = mean_pred_err - se_pred_err,
-              ymax = mean_pred_err + se_pred_err,
-              fill = .method_name
-            ),
-            inherit.aes = FALSE,
-            alpha = 0.2
-          ) +
-          ggplot2::geom_point(size = 2) +
-          ggplot2::geom_line(linewidth = 1) +
-          ggplot2::facet_wrap(
-            ~ .dgp_name, scales = "free", nrow = 1, labeller = facet_labeller
-          ) +
-          ggplot2::scale_color_manual(
-            values = rev(COLORS), labels = KEEP_METHODS,
-            guide = ggplot2::guide_legend(reverse = TRUE)
-          ) +
-          ggplot2::scale_fill_manual(
-            values = rev(COLORS), labels = KEEP_METHODS,
-            guide = ggplot2::guide_legend(reverse = TRUE)
-          ) +
-          ggplot2::scale_linetype_manual(
-            values = rev(LINETYPES), labels = KEEP_METHODS,
-            guide = ggplot2::guide_legend(reverse = TRUE)
-          ) +
-          ggplot2::labs(
-            x = xlab,
-            y = "Mean Test R-squared",
-            color = "Method", fill = "Method", linetype = "Method",
-            tag = tag
-          ) +
-          vthemes::theme_vmodern(size_preset = "large") +
-          ggplot2::theme(
-            legend.key.width = ggplot2::unit(legend_key_width, "cm"),
-            plot.tag = ggplot2::element_text(
-              size = 20, face = "italic", angle = 90, hjust = 0.5, vjust = 1
-            ),
-            plot.tag.position = c(-.055, 0.52),
-            plot.margin = ggplot2::unit(c(0.05, 0, 0.1, 0.75), units = "in")
-          )
-      }
-    )
-  plt <- patchwork::wrap_plots(plt_ls, ncol = 1, guides = "collect")
-  save_figure(plt, filename = sprintf("prediction_pve%s", pve_val), width = 14, height = 7)
+              y = mean_pred_err,
+              color = .method_name,
+              linetype = .method_name
+            ) +
+            ggplot2::geom_ribbon(
+              ggplot2::aes(
+                x = .vary_param,
+                ymin = mean_pred_err - se_pred_err,
+                ymax = mean_pred_err + se_pred_err,
+                fill = .method_name
+              ),
+              inherit.aes = FALSE,
+              alpha = 0.2
+            ) +
+            ggplot2::geom_point(size = 2) +
+            ggplot2::geom_line(linewidth = 1) +
+            ggplot2::facet_wrap(
+              ~ .dgp_name, scales = "free", nrow = 1, labeller = facet_labeller
+            ) +
+            ggplot2::scale_color_manual(
+              values = rev(COLORS), labels = KEEP_METHODS,
+              guide = ggplot2::guide_legend(reverse = TRUE)
+            ) +
+            ggplot2::scale_fill_manual(
+              values = rev(COLORS), labels = KEEP_METHODS,
+              guide = ggplot2::guide_legend(reverse = TRUE)
+            ) +
+            ggplot2::scale_linetype_manual(
+              values = rev(LINETYPES), labels = KEEP_METHODS,
+              guide = ggplot2::guide_legend(reverse = TRUE)
+            ) +
+            ggplot2::labs(
+              x = xlab,
+              y = sprintf("Mean Test %s", ylab),
+              color = "Method", fill = "Method", linetype = "Method",
+              tag = tag
+            ) +
+            vthemes::theme_vmodern(size_preset = "large") +
+            ggplot2::theme(
+              legend.key.width = ggplot2::unit(legend_key_width, "cm"),
+              plot.tag = ggplot2::element_text(
+                size = 20, face = "italic", angle = 90, hjust = 0.5, vjust = 1
+              ),
+              plot.tag.position = c(-.055, 0.52),
+              plot.margin = ggplot2::unit(c(0.05, 0, 0.1, 0.75), units = "in")
+            )
+        }
+      )
+    plt <- patchwork::wrap_plots(plt_ls, ncol = 1, guides = "collect")
+    save_figure(plt, filename = sprintf("prediction_pve%s_%s", pve_val, metric_val), width = 14, height = 7)
+  }
 }
 
 ## Supplementary Prediction Accuracy Plot (across all PVEs)
@@ -737,7 +802,7 @@ for (pve_val in unique(fi_results_df$pve)) {
           )
       }
     )
-  
+
   plt <- patchwork::wrap_plots(
     c(
       plt_ls[1:2],
@@ -1365,7 +1430,7 @@ for (pve_val in unique(fi_results_df$pve)) {
           )
       }
     )
-  
+
   plt <- patchwork::wrap_plots(
     c(
       plt_ls[1:2],
@@ -1492,7 +1557,7 @@ for (metric_name in keep_metrics) {
         }
         plt <- ggplot2::ggplot(.x) +
           ggplot2::aes(
-            x = outliers_scale, 
+            x = outliers_scale,
             y = mean_value
           ) +
           ggplot2::geom_ribbon(
@@ -1510,7 +1575,7 @@ for (metric_name in keep_metrics) {
           ggplot2::scale_x_continuous(breaks = scales::breaks_width(1)) +
           ggplot2::scale_y_reverse() +
           ggplot2::labs(
-            x = expression(bold(paste("Outlier Strength (", kappa, ")"))), 
+            x = expression(bold(paste("Outlier Strength (", kappa, ")"))),
             y = "Influence Rank\nof Outlier",
             tag = tag
           ) +
@@ -1576,10 +1641,10 @@ indiv_alphas_aloo <- purrr::map(
               `Approximate LOO` = aloo_tree_out$alpha_loo[, i] - mean(aloo_tree_out$alpha_loo[, i])
             )[-i, ]
           }
-        ) |> 
+        ) |>
           purrr::list_rbind()
       }
-    ) |> 
+    ) |>
       purrr::list_rbind(names_to = ".tree_id")
   }
 ) |>
@@ -1601,49 +1666,49 @@ indiv_alphas_full <- purrr::map(
               `LOO (full)` = c(sample_out$alphas_ls[[tree_id]]) - mean(sample_out$alphas_ls[[tree_id]])
             )
           }
-        ) |> 
+        ) |>
           purrr::list_rbind()
       }
-    ) |> 
+    ) |>
       purrr::list_rbind()
   }
 ) |>
   dplyr::bind_rows(.id = ".dgp_name")
 
-plt_df_indiv_alphas <- indiv_alphas_aloo |> 
+plt_df_indiv_alphas <- indiv_alphas_aloo |>
   dplyr::left_join(
-    indiv_alphas_full, 
+    indiv_alphas_full,
     by = c(".dgp_name", ".tree_id", ".loo_sample_id", ".sample_id")
-  ) |> 
+  ) |>
   dplyr::filter(
     .loo_sample_id %in% !!loo_sample_ids,
     .tree_id %in% !!tree_ids
   )
 
 # alphas averaged across forest
-mean_alphas_aloo <- indiv_alphas_aloo |> 
-  dplyr::group_by(.dgp_name, .loo_sample_id, .sample_id) |> 
+mean_alphas_aloo <- indiv_alphas_aloo |>
+  dplyr::group_by(.dgp_name, .loo_sample_id, .sample_id) |>
   dplyr::summarize(
     `Approximate LOO` = mean(`Approximate LOO`),
     .groups = "drop"
   )
-mean_alphas_full <- indiv_alphas_full |> 
-  dplyr::group_by(.dgp_name, .loo_sample_id, .sample_id) |> 
+mean_alphas_full <- indiv_alphas_full |>
+  dplyr::group_by(.dgp_name, .loo_sample_id, .sample_id) |>
   dplyr::summarize(
     `LOO (full)` = mean(`LOO (full)`),
     .groups = "drop"
   )
-plt_df_mean_alphas <- mean_alphas_aloo |> 
+plt_df_mean_alphas <- mean_alphas_aloo |>
   dplyr::left_join(
-    mean_alphas_full, 
+    mean_alphas_full,
     by = c(".dgp_name", ".loo_sample_id", ".sample_id")
   )
 
 # plot alphas per tree and across forest
-plt_ls <- dplyr::bind_rows(  
+plt_ls <- dplyr::bind_rows(
   plt_df_indiv_alphas |> dplyr::mutate(.mode = "Individual Tree"),
   plt_df_mean_alphas |> dplyr::mutate(.mode = "Averaged Across Forest")
-) |> 
+) |>
   dplyr::mutate(
     .mode = factor(.mode, levels = c("Individual Tree", "Averaged Across Forest")),
     .dgp_mode = dplyr::case_when(
@@ -1694,7 +1759,7 @@ plt_ls <- dplyr::bind_rows(
         ) +
         vthemes::theme_vmodern(size_preset = "large")
       if (cur_dgp_name != "Locally Spiky Sparse") {
-        plt <- plt + 
+        plt <- plt +
           ggplot2::theme(
             strip.background.y = ggplot2::element_blank(),
             strip.text.y = ggplot2::element_blank()
@@ -1729,6 +1794,11 @@ ggplot2::ggsave(
   filename = file.path(FIG_DIR, "loo_alphas.pdf"),
   width = 13, height = 14
 )
+ggplot2::ggsave(
+  plt_alpha,
+  filename = file.path(FIG_DIR, "loo_alphas.png"),
+  width = 13, height = 14
+)
 
 ## look at LOO training and test predictions
 preds_aloo <- purrr::map(
@@ -1743,7 +1813,7 @@ preds_aloo <- purrr::map(
   dplyr::bind_rows(.id = ".dgp_name")
 
 preds_full <- purrr::map(
-  full_loo_ls, 
+  full_loo_ls,
   function(full_loo_out) {
     purrr::map2(
       full_loo_out, 1:length(full_loo_out),
@@ -1753,15 +1823,15 @@ preds_full <- purrr::map(
           `LOO (full)` = sample_out$loo_pred
         )
       }
-    ) |> 
+    ) |>
       purrr::list_rbind()
   }
 ) |>
   dplyr::bind_rows(.id = ".dgp_name")
 
-plt_df <- preds_aloo |> 
+plt_df <- preds_aloo |>
   dplyr::left_join(
-    preds_full, 
+    preds_full,
     by = c(".dgp_name", ".loo_sample_id")
   ) |>
   dplyr::mutate(
@@ -1777,7 +1847,7 @@ plt_df <- preds_aloo |>
       factor(levels = c("Linear", "Polynomial", "Locally Spiky Sparse"))
   )
 
-plt_train_ls <- plt_df |> 
+plt_train_ls <- plt_df |>
   dplyr::group_by(.dgp_mode) |>
   dplyr::group_map(
     .f = function(.x, .y) {
@@ -1823,14 +1893,14 @@ preds_aloo <- purrr::map(
   aloo_ls,
   function(aloo_out) {
     purrr::map(
-      1:ncol(aloo_out$loo_preds_test), 
+      1:ncol(aloo_out$loo_preds_test),
       function(i) {
         tibble::tibble(
           .sample_id = 1:nrow(aloo_out$loo_preds_test),
           `Approximate LOO` = aloo_out$loo_preds_test[, i]
         )
       }
-    ) |> 
+    ) |>
       purrr::list_rbind(names_to = ".loo_sample_id")
   }
 ) |>
@@ -1840,7 +1910,7 @@ preds_full <- purrr::map(
   full_loo_ls,
   function(full_loo_out) {
     purrr::map(
-      full_loo_out, 
+      full_loo_out,
       function(sample_out) {
         preds <- purrr::reduce(sample_out$preds_ls, `+`) / length(sample_out$preds_ls)
         tibble::tibble(
@@ -1848,15 +1918,15 @@ preds_full <- purrr::map(
           `LOO (full)` = c(preds)
         )
       }
-    ) |> 
+    ) |>
       purrr::list_rbind(names_to = ".loo_sample_id")
   }
 ) |>
   dplyr::bind_rows(.id = ".dgp_name")
 
-plt_df <- preds_aloo |> 
+plt_df <- preds_aloo |>
   dplyr::left_join(
-    preds_full, 
+    preds_full,
     by = c(".dgp_name", ".loo_sample_id", ".sample_id")
   ) |>
   dplyr::mutate(
@@ -1872,7 +1942,7 @@ plt_df <- preds_aloo |>
       factor(levels = c("Linear", "Polynomial", "Locally Spiky Sparse"))
   )
 
-plt_test_ls <- plt_df |> 
+plt_test_ls <- plt_df |>
   dplyr::group_by(.dgp_mode) |>
   dplyr::group_map(
     .f = function(.x, .y) {
@@ -1930,11 +2000,11 @@ ggplot2::ggsave(
 ###########################################################################
 ####################### School Conflict Case Study #######################
 ###########################################################################
-impute_mode_dir <- file.path(RESULTS_DIR, "School Conflict (new)")
+impute_mode_dir <- file.path(RESULTS_DIR, "School Conflict", "laplacian_4")
 schoolids <- setdiff(list.files(impute_mode_dir), "docs")
 eval_results_ls <- purrr::map(schoolids, ~ readRDS(file.path(impute_mode_dir, .x, "eval_results.rds")))
 
-## Prediction Results
+#### Prediction Results ####
 pred_results_df <- purrr::map(eval_results_ls, "Prediction Accuracy") |>
   dplyr::bind_rows() |>
   dplyr::mutate(
@@ -1943,18 +2013,18 @@ pred_results_df <- purrr::map(eval_results_ls, "Prediction Accuracy") |>
   dplyr::filter(
     .metric == "rmse"
   )
-nerf_preds_df <- pred_results_df |> 
+nerf_preds_df <- pred_results_df |>
   dplyr::filter(
     stringr::str_detect(.method_name, "NeRF")
-  ) |> 
-  dplyr::group_by(.schid) |> 
+  ) |>
+  dplyr::group_by(.schid) |>
   dplyr::filter(
     mean_pred_err == min(mean_pred_err)
-  ) |> 
+  ) |>
   dplyr::mutate(
     .method_name = "NeRF+"
   )
-pred_results_df <- pred_results_df |> 
+pred_results_df <- pred_results_df |>
   dplyr::filter(
     !stringr::str_detect(.method_name, "NeRF"),
   ) |>
@@ -1962,7 +2032,7 @@ pred_results_df <- pred_results_df |>
 
 # get basic stats about each school
 SCHIDS <- c(
-  "1", "10", "13", "19", 
+  "1", "10", "13", "19",
   "20", "21", "22", "24", "26", "27", "29",
   "3", "31", "33", "34", "35",
   "40", "42", "44", "45", "48", "49",
@@ -1973,7 +2043,7 @@ for (SCHID in SCHIDS) {
   print(SCHID)
   dgp_name <- "School Conflict"
   dgp <- create_dgp(
-    .dgp_fun = load_school_conflict_data, 
+    .dgp_fun = load_school_conflict_data,
     .name = dgp_name,
     keep_schools = SCHID,
     include_w1 = TRUE,
@@ -1985,7 +2055,7 @@ for (SCHID in SCHIDS) {
   )
   data_list <- dgp$generate()
   data_stats_ls[[as.character(SCHID)]] <- data.frame(
-    `# Samples` = nrow(data_list$x), 
+    `# Samples` = nrow(data_list$x),
     `Var(y)` = var(data_list$y),
     check.names = FALSE
   )
@@ -2038,7 +2108,7 @@ rank_df <- pred_results_r2_df |>
   ) |>
   dplyr::mutate(
     .method_name = factor(
-      .method_name, 
+      .method_name,
       levels = c(names(KEEP_METHODS), "RF")
     )
   ) |>
@@ -2052,7 +2122,7 @@ print(rank_df)
 vthemes::pretty_kable(rank_df, format = "latex")
 
 # method r2 averages
-metric_df <- pred_results_r2_df |> 
+metric_df <- pred_results_r2_df |>
   dplyr::group_by(.method_name) |>
   dplyr::summarize(
     mean_r2 = mean(mean_pred_err)
@@ -2064,28 +2134,77 @@ metric_df <- pred_results_r2_df |>
 print(metric_df)
 
 # full table of prediction performances
-tab <- pred_results_r2_df |> 
+tab <- pred_results_r2_df |>
   dplyr::mutate(
     err = sprintf("%.3f (%.3f)", mean_pred_err, se_pred_err)
-  ) |> 
+  ) |>
   tidyr::pivot_wider(
     id_cols = .schid, names_from = .method_name, values_from = err
-  ) |> 
-  dplyr::left_join(data_stats_df, by = ".schid") |> 
+  ) |>
+  dplyr::left_join(data_stats_df, by = ".schid") |>
   dplyr::select(
     School = .schid,
     n = `# Samples`,
     # `Var(y)`,
     `NeRF+`, RNC, `Network BART`, `RF+`, `Linear Regression`, BART, RF
-  ) |> 
+  ) |>
   dplyr::arrange(as.numeric(School)) |>
   dplyr::bind_rows(
-    metric_df |> 
+    metric_df |>
       dplyr::mutate(dplyr::across(tidyselect::everything(), ~ sprintf("%.3f", .x)))
   )
 print(tab)
-tab |> 
+tab |>
   vthemes::pretty_kable(format = "latex")
+
+# re-formatted full table of prediction performances
+tab <- pred_results_r2_df |>
+  dplyr::group_by(.schid) |>
+  dplyr::mutate(
+    # Identify the top-performing method per school
+    is_best = mean_pred_err == max(mean_pred_err),
+
+    # Extract NeRF+ upper bound (+1 SE) for comparison
+    nerf_upper = mean_pred_err[.method_name == "NeRF+"] + se_pred_err[.method_name == "NeRF+"],
+
+    # Extract 2nd best upper bound (+1 SE) if NeRF+ itself is the top method
+    second_upper = sort(mean_pred_err, decreasing = TRUE)[2] +
+      se_pred_err[order(mean_pred_err, decreasing = TRUE)][2],
+
+    # Check for non-overlapping standard errors
+    is_sig_best = dplyr::case_when(
+      # If NeRF+ is best, compare its lower bound to the 2nd best method's upper bound
+      is_best & .method_name == "NeRF+" ~ (mean_pred_err - se_pred_err) > second_upper,
+      # If another method is best, compare its lower bound to NeRF+'s upper bound
+      is_best & .method_name != "NeRF+" ~ (mean_pred_err - se_pred_err) > nerf_upper,
+      TRUE ~ FALSE
+    ),
+
+    # Format string with conditional LaTeX styling
+    err = dplyr::case_when(
+      is_sig_best ~ sprintf("\\textbf{\\textit{%.3f (%.3f)}}", mean_pred_err, se_pred_err),
+      is_best     ~ sprintf("\\textit{%.3f (%.3f)}", mean_pred_err, se_pred_err),
+      TRUE        ~ sprintf("%.3f (%.3f)", mean_pred_err, se_pred_err)
+    )
+  ) |>
+  dplyr::ungroup() |>
+  tidyr::pivot_wider(
+    id_cols = .schid, names_from = .method_name, values_from = err
+  ) |>
+  dplyr::left_join(data_stats_df, by = ".schid") |>
+  dplyr::select(
+    School = .schid,
+    n = `# Samples`,
+    `NeRF+`, RNC, `Network BART`, `RF+`, `Linear Regression`, BART, RF
+  ) |>
+  dplyr::arrange(as.numeric(School)) |>
+  dplyr::bind_rows(
+    metric_df |>
+      dplyr::mutate(dplyr::across(tidyselect::everything(), ~ sprintf("%.3f", .x)))
+  )
+print(tab)
+tab |>
+  vthemes::pretty_kable(format = "latex", escape = FALSE)
 
 ## Global feature importance Plot
 var_labels <- c(
@@ -2106,13 +2225,13 @@ var_labels <- c(
 plt_df <- list(
   `Permutation Importance` = purrr::map(
     eval_results_ls, "Permutation Feature Importances"
-  ) |> 
+  ) |>
     dplyr::bind_rows(.id = ".schid"),
   `MDI+ Importance` = purrr::map(
     eval_results_ls, "MDI+ Feature Importances"
-  ) |> 
+  ) |>
     dplyr::bind_rows(.id = ".schid")
-) |> 
+) |>
   dplyr::bind_rows(.id = ".fi_mode") |>
   dplyr::mutate(
     .schid = factor(.dgp_name, levels = paste("School", SCHIDS)),
@@ -2131,7 +2250,7 @@ plt_df <- list(
       var %in% c(".alpha", ".embed") ~ "white",
       TRUE ~ "Non-Network"
     )
-  ) |> 
+  ) |>
   dplyr::filter(
     !is.na(var)
   )
@@ -2320,64 +2439,64 @@ for (fdir in file.path(impute_mode_dir, keep_schools)) {
   fit_results <- readRDS(file.path(fdir, "fit_results.rds"))
   schid <- stringr::str_extract(basename(fdir), "[0-9]+")
   print(schid)
-  
+
   dgp <- create_dgp(
-    .dgp_fun = load_school_conflict_data, 
+    .dgp_fun = load_school_conflict_data,
     .name = schid,
     keep_schools = schid,
     include_w1 = TRUE,
     impute_mode = "none",
     train_prop = 1,
-    response_type = "PNW2", 
+    response_type = "PNW2",
     network_type = "A",
     connected = TRUE
   )
   data_list <- dgp$generate()
-  
+
   sample_ids <- rownames(data_list$A_full)
-  
+
   get_test_ids <- function(A, A_full) {
     n <- nrow(A)
     return(rownames(A_full)[(n + 1):nrow(A_full)])
   }
-  
-  lfi_results <- fit_results |> 
+
+  lfi_results <- fit_results |>
     dplyr::filter(
       .method_name == "NeRF+"
-    ) |> 
+    ) |>
     dplyr::mutate(
       test_ids = purrr::map2(A, A_full, ~ get_test_ids(.x, .y)),
       local_importance = purrr::map2(
         .x = local_importance,
         .y = test_ids,
         function(.x, .y) {
-          data.frame(id = sample_ids) |> 
+          data.frame(id = sample_ids) |>
             dplyr::left_join(dplyr::bind_cols(id = .y, .x), by = "id")
         }
       )
-    ) |> 
+    ) |>
     dplyr::pull(local_importance)
-  
+
   network_lfi <- purrr::map(
     lfi_results,
     function(lfi) {
       lfi$.network
     }
-  ) |> 
-    purrr::reduce(cbind) |> 
+  ) |>
+    purrr::reduce(cbind) |>
     rowSums(na.rm = TRUE)
   network_lfi <- network_lfi / length(lfi_results)
-  
+
   set.seed(1234)
   g <- igraph::graph_from_adjacency_matrix(
     data_list$A_full > 0, mode = "undirected"
   )
-  
+
   plt <- ggraph::ggraph(
     g, "igraph", algorithm = "nicely"
   )
-  
-  plt_df <- plt$data |> 
+
+  plt_df <- plt$data |>
     dplyr::mutate(
       response = data_list$y,
       lfi = network_lfi
@@ -2385,8 +2504,8 @@ for (fdir in file.path(impute_mode_dir, keep_schools)) {
   if ("GRC" %in% colnames(data_list$x)) {
     plt_df <- plt_df |>
       dplyr::mutate(
-        grade = stringr::str_remove(data_list$x$GRC, "\\(.*\\)") |> 
-          stringr::str_remove("grade") |> 
+        grade = stringr::str_remove(data_list$x$GRC, "\\(.*\\)") |>
+          stringr::str_remove("grade") |>
           stringr::str_trim()
       )
   } else {
@@ -2409,64 +2528,64 @@ for (fdir in file.path(impute_mode_dir, keep_schools)) {
   fit_results <- readRDS(file.path(fdir, "fit_results.rds"))
   schid <- stringr::str_extract(basename(fdir), "[0-9]+")
   print(schid)
-  
+
   dgp <- create_dgp(
-    .dgp_fun = load_school_conflict_data, 
+    .dgp_fun = load_school_conflict_data,
     .name = schid,
     keep_schools = schid,
     include_w1 = TRUE,
     impute_mode = "none",
     train_prop = 1,
-    response_type = "PNW2", 
+    response_type = "PNW2",
     network_type = "A",
     connected = TRUE
   )
   data_list <- dgp$generate()
-  
+
   sample_ids <- rownames(data_list$A_full)
-  
+
   get_test_ids <- function(A, A_full) {
     n <- nrow(A)
     return(rownames(A_full)[(n + 1):nrow(A_full)])
   }
-  
-  lfi_results <- fit_results |> 
+
+  lfi_results <- fit_results |>
     dplyr::filter(
       .method_name == "NeRF+"
-    ) |> 
+    ) |>
     dplyr::mutate(
       test_ids = purrr::map2(A, A_full, ~ get_test_ids(.x, .y)),
       local_importance = purrr::map2(
         .x = local_importance,
         .y = test_ids,
         function(.x, .y) {
-          data.frame(id = sample_ids) |> 
+          data.frame(id = sample_ids) |>
             dplyr::left_join(dplyr::bind_cols(id = .y, .x), by = "id")
         }
       )
-    ) |> 
+    ) |>
     dplyr::pull(local_importance)
-  
+
   network_lfi <- purrr::map(
     lfi_results,
     function(lfi) {
       lfi$.network
     }
-  ) |> 
-    purrr::reduce(cbind) |> 
+  ) |>
+    purrr::reduce(cbind) |>
     rowSums(na.rm = TRUE)
   network_lfi <- network_lfi / length(lfi_results)
-  
+
   set.seed(1234)
   g <- igraph::graph_from_adjacency_matrix(
     data_list$A_full > 0, mode = "undirected"
   )
-  
+
   plt <- ggraph::ggraph(
     g, "igraph", algorithm = "nicely"
   )
-  
-  plt_df <- plt$data |> 
+
+  plt_df <- plt$data |>
     dplyr::mutate(
       response = data_list$y,
       lfi = network_lfi
@@ -2474,14 +2593,14 @@ for (fdir in file.path(impute_mode_dir, keep_schools)) {
   if ("GRC" %in% colnames(data_list$x)) {
     plt_df <- plt_df |>
       dplyr::mutate(
-        grade = stringr::str_remove(data_list$x$GRC, "\\(.*\\)") |> 
-          stringr::str_remove("grade") |> 
+        grade = stringr::str_remove(data_list$x$GRC, "\\(.*\\)") |>
+          stringr::str_remove("grade") |>
           stringr::str_trim()
       )
   } else {
     plt_df <- plt_df |>
       dplyr::mutate(grade = " ")
-  } 
+  }
   plt1 <- plt +
     ggplot2::geom_point(
       ggplot2::aes(x = x, y = y, fill = grade),
@@ -2511,7 +2630,7 @@ for (fdir in file.path(impute_mode_dir, keep_schools)) {
       legend.text = ggplot2::element_text(size = 12),
       legend.position = "bottom"
     )
-  
+
   plt2 <- plt +
     ggplot2::geom_point(
       ggplot2::aes(x = x, y = y, fill = grade),
@@ -2525,7 +2644,7 @@ for (fdir in file.path(impute_mode_dir, keep_schools)) {
       data = plt_df, size = 6
     ) +
     ggplot2::scale_color_viridis_c(
-      option = "C", begin = 0, end = 0.95, 
+      option = "C", begin = 0, end = 0.95,
       limits = y_limits
     ) +
     ggplot2::scale_fill_manual(
@@ -2541,8 +2660,8 @@ for (fdir in file.path(impute_mode_dir, keep_schools)) {
       legend.text = ggplot2::element_text(size = 12),
       legend.position = "bottom"
     )
-  
-  plt_ls[[schid]] <- patchwork::wrap_plots(plt2, plt1, nrow = 1, guides = "collect") & 
+
+  plt_ls[[schid]] <- patchwork::wrap_plots(plt2, plt1, nrow = 1, guides = "collect") &
     ggplot2::theme(legend.position = 'bottom')
 }
 plt <- patchwork::wrap_plots(plt_ls, nrow = 2, guides = "collect")
@@ -2550,10 +2669,44 @@ save_figure(
   plt, "school_conflict_lfi_main", width = 16, height = 15
 )
 
+#### Conformal Results ####
+impute_mode_dir <- file.path(RESULTS_DIR, "School Conflict (Conformal)", "laplacian_4")
+conformal_ls <- purrr::map(
+  schoolids,
+  function(.x) {
+    if (file.exists(file.path(impute_mode_dir, .x, "conformal_results.rds"))) {
+      return(readRDS(
+        file.path(impute_mode_dir, .x, "conformal_results.rds")
+      ))
+    }
+  }
+) |>
+  setNames(schoolids) |>
+  purrr::compact()
+purrr::list_rbind(conformal_ls, names_to = "SchoolID") |>
+  dplyr::mutate(
+    y_test = unlist(y_test)
+  ) |>
+  tidyr::unnest(c(y_test, predictions)) |>
+  dplyr::mutate(
+    is_in_ci = (y_test >= lower_bound) & (y_test <= upper_bound)
+  ) |>
+  dplyr::group_by(SchoolID) |>
+  dplyr::summarise(
+    coverage = mean(is_in_ci),
+    .groups = "drop"
+  ) |>
+  dplyr::mutate(
+    schoolid_num = as.numeric(stringr::str_remove_all(SchoolID, "School "))
+  ) |>
+  dplyr::arrange(schoolid_num) |>
+  dplyr::select(-schoolid_num) |>
+  vthemes::pretty_kable(format = "latex")
+
 ###########################################################################
 ######################### Philly Crime Case Study #########################
 ###########################################################################
-## prediction results
+#### Prediction Results ####
 subsamples <- c(0.001, 0.005, 0.01, 0.05, 0.1)
 pred_results_df <- purrr::map(
   subsamples,
@@ -2561,7 +2714,7 @@ pred_results_df <- purrr::map(
     fit_results <- readRDS(
       file.path(
         RESULTS_DIR,
-        "Philly Crime (Predictions)",
+        "Philly Crime (Predictions)", "laplacian_2",
         sprintf("Philly Crime (random, with weather, %s)", subsample),
         "fit_results.rds"
       )
@@ -2577,8 +2730,8 @@ pred_results_df <- purrr::map(
       dplyr::select(.rep, tract_groups)
     fit_results <- dplyr::left_join(fit_results, tract_groups, by = ".rep")
     eval_results <- summarize_pred_err(
-      fit_results, 
-      truth_col = "y_test", 
+      fit_results,
+      truth_col = "y_test",
       estimate_col = "predictions",
       group_cols = "tract_groups",
       custom_summary_funs = list(
@@ -2594,6 +2747,7 @@ pred_results_df <- purrr::map(
   dplyr::mutate(
     .method_name = factor(.method_name, levels = rev(METHOD_LEVELS)),
     .dgp_name = forcats::fct_inorder(.dgp_name),
+    .network = "unweighted",
     tract_groups = factor(tract_groups, levels = c("Training Tracts", "Test Tracts"))
   )
 
@@ -2608,7 +2762,7 @@ plt <- pred_results_df |>
   ) |>
   ggplot2::ggplot() +
   ggplot2::aes(
-    x = .subsample, 
+    x = .subsample,
     y = mean_pred_err,
     color = .method_name,
     linetype = .method_name
@@ -2651,12 +2805,119 @@ save_figure(
   plt, filename = "philly_crime_predictions", width = 10, height = 3.5
 )
 
+subsamples <- c(0.001, 0.005, 0.01, 0.05)#, 0.1)
+pred_results_weighted_df <- purrr::map(
+  subsamples,
+  function(subsample) {
+    fit_results <- readRDS(
+      file.path(
+        RESULTS_DIR,
+        "Philly Crime (Predictions)", "laplacian_2",
+        sprintf("Philly Crime (random, with weather, weighted network, %s)", subsample),
+        "fit_results.rds"
+      )
+    )
+    tract_groups <- fit_results |>
+      dplyr::filter(.method_name == "Linear Regression") |>
+      dplyr::mutate(
+        tract_groups = purrr::map(
+          verbose_data_out,
+          ~ ifelse(.x$nodeids_test %in% unique(.x$nodeids), "Training Tracts", "Test Tracts")
+        )
+      ) |>
+      dplyr::select(.rep, tract_groups)
+    fit_results <- dplyr::left_join(fit_results, tract_groups, by = ".rep")
+    eval_results <- summarize_pred_err(
+      fit_results,
+      truth_col = "y_test",
+      estimate_col = "predictions",
+      group_cols = "tract_groups",
+      custom_summary_funs = list(
+        "se_pred_err" = function(x) sd(x, na.rm = TRUE) / sqrt(sum(!is.na(x)))
+      )
+    ) |>
+      dplyr::mutate(
+        .subsample = !!subsample
+      )
+  }
+) |>
+  dplyr::bind_rows() |>
+  dplyr::mutate(
+    .method_name = factor(.method_name, levels = rev(METHOD_LEVELS)),
+    .dgp_name = forcats::fct_inorder(.dgp_name),
+    .network = "weighted",
+    tract_groups = factor(tract_groups, levels = c("Training Tracts", "Test Tracts"))
+  )
+
+metric_val <- "rsq"
+plt <- dplyr::bind_rows(pred_results_df, pred_results_weighted_df) |>
+  dplyr::filter(
+    .metric == !!metric_val,
+    !is.na(.method_name),
+    .subsample %in% !!subsamples,
+    tract_groups == "Test Tracts"
+  ) |>
+  dplyr::mutate(
+    tract_groups = factor(tract_groups, levels = c("Training Tracts", "Test Tracts")),
+    .network = dplyr::case_when(
+      .network == "unweighted" ~ "Unweighted Network",
+      .network == "weighted" ~ "Weighted Network"
+    )
+  ) |>
+  ggplot2::ggplot() +
+  ggplot2::aes(
+    x = .subsample,
+    y = mean_pred_err,
+    color = .method_name,
+    linetype = .method_name
+  ) +
+  ggplot2::geom_ribbon(
+    ggplot2::aes(
+      x = .subsample,
+      ymin = mean_pred_err - se_pred_err,
+      ymax = mean_pred_err + se_pred_err,
+      fill = .method_name
+    ),
+    inherit.aes = FALSE,
+    alpha = 0.2
+  ) +
+  ggplot2::geom_line(linewidth = 1) +
+  ggplot2::facet_grid(tract_groups ~ .network) +
+  ggplot2::scale_color_manual(
+    values = rev(COLORS), labels = KEEP_METHODS,
+    guide = ggplot2::guide_legend(reverse = TRUE)
+  ) +
+  ggplot2::scale_fill_manual(
+    values = rev(COLORS), labels = KEEP_METHODS,
+    guide = ggplot2::guide_legend(reverse = TRUE)
+  ) +
+  ggplot2::scale_linetype_manual(
+    values = rev(LINETYPES), labels = KEEP_METHODS,
+    guide = ggplot2::guide_legend(reverse = TRUE)
+  ) +
+  # ggplot2::scale_x_continuous(
+  #   breaks = seq(0, max(subsamples), by = 0.05),
+  #   labels = seq(0, max(subsamples), by = 0.05)
+  # ) +
+  ggplot2::labs(
+    x = "Training Proportion",
+    y = "R-squared",
+    color = "Method", fill = "Method", linetype = "Method"
+  ) +
+  vthemes::theme_vmodern(size_preset = "large") +
+  ggplot2::theme(
+    legend.key.width = ggplot2::unit(2, "cm")
+  )
+save_figure(
+  plt, filename = "philly_crime_predictions_weighted", width = 10, height = 3.5
+)
+
 ## global feature importance results
 subsample <- 0.01
 eval_results <- readRDS(
   file.path(
-    RESULTS_DIR, 
-    "Philly Crime (Global Importance)", 
+    RESULTS_DIR,
+    "Philly Crime (Global Importance)", "laplacian_2",
     sprintf("Philly Crime (random, with weather, %s)", subsample),
     "eval_results.rds"
   )
@@ -2773,8 +3034,8 @@ subsample <- 0.01
 rep <- 1
 fit_results <- readRDS(
   file.path(
-    RESULTS_DIR, 
-    "Philly Crime (Local Importance)", 
+    RESULTS_DIR,
+    "Philly Crime (Local Importance)", "laplacian_2",
     sprintf("Philly Crime (random, with weather, %s)", subsample),
     "fit_results.rds"
   )
@@ -2797,7 +3058,7 @@ response_df <- tibble::tibble(
   dplyr::group_by(tract_id) |>
   dplyr::summarise(
     y = mean(y)
-  ) |> 
+  ) |>
   dplyr::arrange(tract_id)
 
 lfi_df <- lfi_results |>
@@ -2807,7 +3068,7 @@ lfi_df <- lfi_results |>
   dplyr::group_by(tract_id) |>
   dplyr::summarise(
     dplyr::across(tidyselect::everything(), ~ mean(.x))
-  ) |> 
+  ) |>
   dplyr::arrange(tract_id)
 
 set.seed(123456)
@@ -2817,7 +3078,7 @@ g <- igraph::graph_from_adjacency_matrix(
 plt <- ggraph::ggraph(
   g, "igraph", algorithm = "nicely"
 )
-plt_df <- plt$data |> 
+plt_df <- plt$data |>
   dplyr::mutate(
     response = response_df$y,
     lfi = lfi_df$.alpha
@@ -2858,3 +3119,2143 @@ plt <- patchwork::wrap_plots(plt_observed, plt_lfi, ncol = 1, guides = "collect"
 save_figure(
   plt, "philly_crime_local_importance", width = 8, height = 8
 )
+
+#### Conformal Results ####
+conformal_df <- readRDS(
+  file.path(
+    RESULTS_DIR, "Philly Crime (Conformal)", "laplacian_2",
+    "Philly Crime (random, with weather, 0.01)",
+    "conformal_results.rds"
+  )
+)
+conformal_df |>
+  tidyr::unnest(c(y_test, predictions)) |>
+  dplyr::mutate(
+    is_in_ci = (y_test >= lower_bound) & (y_test <= upper_bound)
+  ) |>
+  dplyr::pull(is_in_ci) |>
+  mean()
+
+################################################################################
+############################## Conformal Results ###############################
+################################################################################
+eval_results <- purrr::map(
+  EXP_NAMES_MAIN,
+  function(exp_name) {
+    eval_results <- readRDS(
+      file.path(RESULTS_DIR, "Conformal Simulations", exp_name, "eval_results.rds")
+    )$`Conformal Coverage`
+  }
+) |>
+  dplyr::bind_rows() |>
+  dplyr::mutate(
+    .dgp_type = dplyr::case_when(
+      stringr::str_detect(.dgp_name, "Additive Blockwise") ~ "Additive Blockwise Network Effect",
+      stringr::str_detect(.dgp_name, "Autocorrelation") ~ "Network Autocorrelation Effect"
+    ),
+    .dgp_name = dplyr::case_when(
+      stringr::str_detect(.dgp_name, "Linear") ~ "Linear",
+      stringr::str_detect(.dgp_name, "LSS") ~ "Locally\nSpiky\nSparse",
+      stringr::str_detect(.dgp_name, "Poly") ~ "Polynomial"
+    )
+  )
+
+coverage_plt <- eval_results |>
+  tidyr::unnest(raw_coverage) |>
+  ggplot2::ggplot() +
+  ggplot2::aes(
+    x = .dgp_name, y = raw_coverage
+  ) +
+  ggplot2::geom_boxplot() +
+  ggplot2::geom_hline(
+    yintercept = 0.95, color = "darkgray", linetype = "dashed"
+  ) +
+  ggplot2::facet_wrap(
+    ~ .dgp_type, scales = "free", nrow = 1
+  ) +
+  ggplot2::ylim(c(0.9, 1)) +
+  ggplot2::labs(
+    y = "Coverage of Prediction Intervals", x = "Data-Generating Process"
+  ) +
+  vthemes::theme_vmodern(
+    size_preset = "large",
+    bg_color = "white", grid_color = "white"
+  )
+save_figure(
+  coverage_plt,
+  filename = "conformal_plot",
+  width = 10, height = 4.5
+)
+
+################################################################################
+######################## Multi-obs per Node Results ############################
+################################################################################
+
+EXP_NAMES_MULTI <- c(
+  "Linear Additive Blockwise Network DGP",
+  "LSS Additive Blockwise Network DGP",
+  "Polynomial Additive Blockwise Network DGP"
+)
+
+eval_results_ls <- purrr::map(
+  EXP_NAMES_MULTI,
+  function(exp_name) {
+    vary_param_name <- "n-n_per_node"
+    exp_dir <- get_exp_dir(
+      exp_name, with_pve = FALSE, vary_param_name = vary_param_name
+    )
+    eval_results <- readRDS(file.path(exp_dir, "eval_results.rds")) |>
+      purrr::map(
+        ~ .x |>
+          dplyr::mutate(
+            .dgp_mode = dplyr::case_when(
+              stringr::str_detect(exp_name, "Blockwise") ~
+                "Additive Blockwise\nNetwork Effect",
+              stringr::str_detect(exp_name, "Autocorrelation") ~
+                "Network Autocorrelation\nEffect"
+            )
+          )
+      )
+  }
+)
+
+#### Prediction Accuracy Plots ####
+pred_results_df <- purrr::map(eval_results_ls, "Prediction Accuracy") |>
+  dplyr::bind_rows() |>
+  dplyr::mutate(
+    .method_name = factor(.method_name, levels = rev(METHOD_LEVELS)),
+    .dgp_name = forcats::fct_inorder(.dgp_name),
+    n_nodes = n / n_per_node
+  ) |>
+  dplyr::filter(
+    (n_nodes == 150) | (n_per_node == 1)
+  ) |>
+  dplyr::mutate(
+    .is_multi = ifelse(n_per_node > 1, "Multi", "Single")
+  )
+pred_results_df <- dplyr::bind_rows(
+  pred_results_df,
+  pred_results_df |>
+    dplyr::filter(n == 150) |>
+    dplyr::mutate(.is_multi = "Multi")
+)
+
+## Main Prediction Accuracy Plot (use pve = 0.4)
+metric_val <- "rsq"
+plt <- pred_results_df |>
+  dplyr::filter(
+    .metric == !!metric_val,
+    .method_name == "NeRF+",
+    n <= 450
+  ) |>
+  dplyr::mutate(
+    .dgp_name = dplyr::case_when(
+      .dgp_name == "Linear Additive Blockwise Network DGP" ~
+        "Linear",
+      .dgp_name == "Polynomial Additive Blockwise Network DGP" ~
+        "Polynomial",
+      .dgp_name == "LSS Additive Blockwise Network DGP" ~
+        "Locally Spiky Sparse",
+      TRUE ~ .dgp_name
+    ),
+    .is_multi = factor(.is_multi, levels = c("Single", "Multi"))
+  ) |>
+  ggplot2::ggplot() +
+  ggplot2::aes(
+    x = n,
+    y = mean_pred_err,
+    color = .is_multi,
+    linetype = .is_multi
+  ) +
+  ggplot2::geom_ribbon(
+    ggplot2::aes(
+      x = n,
+      ymin = mean_pred_err - se_pred_err,
+      ymax = mean_pred_err + se_pred_err,
+      fill = .is_multi
+    ),
+    inherit.aes = FALSE,
+    alpha = 0.2
+  ) +
+  ggplot2::geom_point(size = 2) +
+  ggplot2::geom_line(linewidth = 1) +
+  ggplot2::facet_wrap(
+    ~ .dgp_name, scales = "free", nrow = 1
+  ) +
+  ggplot2::scale_color_manual(
+    values = c("black", "#179CBB")
+  ) +
+  ggplot2::scale_fill_manual(
+    values = c("black", "#179CBB")
+  ) +
+  ggplot2::labs(
+    x = "Sample Size (n)",
+    y = "Mean Test R-squared",
+    color = "", fill = "", linetype = ""
+  ) +
+  vthemes::theme_vmodern(size_preset = "large") +
+  ggplot2::theme(
+    legend.key.width = ggplot2::unit(legend_key_width, "cm")
+  )
+save_figure(plt, filename = sprintf("prediction_multi_%s", metric_val), width = 13.5, height = 4.5)
+
+################################################################################
+################# Different Network Embeddings + Dimensions ####################
+################################################################################
+
+KEEP_METHODS3 <- c(
+  "NeRF+ (laplacian)" = "NeRF+ (Laplacian)",
+  "NeRF+ (adjacency)" = "NeRF+ (Adjacency)",
+  "NeRF+ (laplacian_adjacency)" = "NeRF+ (Laplacian & Adjacency)",
+  "NeRF+ (Laplacian 1)" = "NeRF+ (r = 1)",
+  "NeRF+ (Laplacian 2)" = "NeRF+ (r = 2)",
+  "NeRF+ (Laplacian 3)" = "NeRF+ (r = 3)",
+  "NeRF+ (Laplacian 5)" = "NeRF+ (r = 5)",
+  "NeRF+ (lambda = 0.01)" = "NeRF+ (lambdaL = 0.01)",
+  "NeRF+ (lambda = 0.05)" = "NeRF+ (lambdaL = 0.05)",
+  "NeRF+ (lambda = 0.1)" = "NeRF+ (lambdaL = 0.1)",
+  "RNC" = "RNC",
+  "Network BART" = "Network BART",
+  "RF+" = "RF+",
+  "Linear Regression" = "Linear",
+  "BART" = "BART"
+)
+COLORS3 <- c(
+  "NeRF+ (laplacian)" = "black",
+  "NeRF+ (adjacency)" = "#1f5d8f",
+  "NeRF+ (laplacian_adjacency)" = "#6aafe4",
+  "NeRF+ (Laplacian 1)" = "#8BADC4",
+  "NeRF+ (Laplacian 2)" = "black",
+  "NeRF+ (Laplacian 3)" = "#6aafe4",
+  "NeRF+ (Laplacian 5)" = "#1f5d8f",
+  "NeRF+ (lambda = 0.01)" = "#6aafe4",
+  "NeRF+ (lambda = 0.05)" = "black",
+  "NeRF+ (lambda = 0.1)" = "#1f5d8f",
+  "RNC" = "#DE68A1",
+  "Network BART" = "#68A65E",
+  "RF+" = "black",
+  "Linear Regression" = "#DE68A1",
+  "BART" = "#68A65E"
+)
+LINETYPES3 <- c(
+  "NeRF+ (laplacian)" = "solid",
+  "NeRF+ (adjacency)" = "solid",
+  "NeRF+ (laplacian_adjacency)" = "solid",
+  "NeRF+ (Laplacian 1)" = "solid",
+  "NeRF+ (Laplacian 2)" = "solid",
+  "NeRF+ (Laplacian 3)" = "solid",
+  "NeRF+ (Laplacian 5)" = "solid",
+  "NeRF+ (lambda = 0.01)" = "solid",
+  "NeRF+ (lambda = 0.05)" = "solid",
+  "NeRF+ (lambda = 0.1)" = "solid",
+  "RNC" = "solid",
+  "Network BART" = "solid",
+  "RF+" = "dashed",
+  "Linear Regression" = "dashed",
+  "BART" = "dashed",
+  "NeRF+ (Cohesion Only)" = "solid",
+  "NeRF+ (Embedding Only)" = "solid"
+)
+
+#### Prediction Accuracy Plots ####
+EMBEDDING_TYPES <- c(
+  "laplacian",
+  "adjacency",
+  "laplacian_adjacency"
+)
+
+eval_results_ls <- purrr::map(
+  EMBEDDING_TYPES,
+  function(embedding_type) {
+    purrr::map(
+      EXP_NAMES_MAIN,
+      function(exp_name) {
+        vary_param_name <- get_vary_param_name(exp_name)
+        exp_dir <- get_exp_dir(exp_name, embedding_type = embedding_type)
+        eval_results <- readRDS(file.path(exp_dir, "eval_results.rds")) |>
+          purrr::map(
+            ~ .x |>
+              dplyr::mutate(
+                .vary_param = .data[[vary_param_name]],
+                .dgp_mode = dplyr::case_when(
+                  stringr::str_detect(exp_name, "Blockwise") ~
+                    "Additive Blockwise\nNetwork Effect",
+                  stringr::str_detect(exp_name, "Autocorrelation") ~
+                    "Network Autocorrelation\nEffect"
+                ),
+                .method_name = dplyr::case_when(
+                  stringr::str_detect(.method_name, "NeRF") ~ sprintf("%s (%s)", .method_name, embedding_type),
+                  TRUE ~ .method_name
+                )
+              )
+          )
+      }
+    )
+  }
+)
+eval_results_ls <- c(eval_results_ls[[1]], eval_results_ls[[2]], eval_results_ls[[3]])
+
+pred_results_df <- purrr::map(eval_results_ls, "Prediction Accuracy") |>
+  dplyr::bind_rows() |>
+  dplyr::mutate(
+    .method_name = factor(.method_name, levels = rev(METHOD_LEVELS)),
+    .dgp_name = forcats::fct_inorder(.dgp_name)
+  )
+
+## Main Prediction Accuracy Plot (use pve = 0.4)
+metric_val <- "rsq"
+for (pve_val in unique(pred_results_df$pve)) {
+  plt_ls <- pred_results_df |>
+    dplyr::group_by(
+      .dgp_mode
+    ) |>
+    dplyr::group_map(
+      .f = function(.x, .y) {
+        dgp_mode <- .y$.dgp_mode[[1]]
+        if (stringr::str_detect(dgp_mode, "Blockwise")) {
+          xlab <- expression(
+            bold(paste("Network Effect (", eta, ")"))
+          )
+          tag <- sprintf("(A) %s", dgp_mode)
+        } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+          xlab <- expression(
+            bold(paste("Network Effect (", omega, ")"))
+          )
+          tag <- sprintf("(B) %s", dgp_mode)
+        }
+        .x |>
+          dplyr::filter(
+            pve == !!pve_val,
+            .metric == !!metric_val,
+            .method_name %in% names(KEEP_METHODS3)
+          ) |>
+          ggplot2::ggplot() +
+          ggplot2::aes(
+            x = .vary_param,
+            y = mean_pred_err,
+            color = .method_name,
+            linetype = .method_name
+          ) +
+          ggplot2::geom_ribbon(
+            ggplot2::aes(
+              x = .vary_param,
+              ymin = mean_pred_err - se_pred_err,
+              ymax = mean_pred_err + se_pred_err,
+              fill = .method_name
+            ),
+            inherit.aes = FALSE,
+            alpha = 0.2
+          ) +
+          ggplot2::geom_point(size = 2) +
+          ggplot2::geom_line(linewidth = 1) +
+          ggplot2::facet_wrap(
+            ~ .dgp_name, scales = "free", nrow = 1, labeller = facet_labeller
+          ) +
+          ggplot2::scale_color_manual(
+            values = rev(COLORS3), labels = KEEP_METHODS3,
+            guide = ggplot2::guide_legend(reverse = TRUE)
+          ) +
+          ggplot2::scale_fill_manual(
+            values = rev(COLORS3), labels = KEEP_METHODS3,
+            guide = ggplot2::guide_legend(reverse = TRUE)
+          ) +
+          ggplot2::scale_linetype_manual(
+            values = rev(LINETYPES3), labels = KEEP_METHODS3,
+            guide = ggplot2::guide_legend(reverse = TRUE)
+          ) +
+          ggplot2::labs(
+            x = xlab,
+            y = "Mean Test R-squared",
+            color = "Method", fill = "Method", linetype = "Method",
+            tag = tag
+          ) +
+          vthemes::theme_vmodern(size_preset = "large") +
+          ggplot2::theme(
+            legend.key.width = ggplot2::unit(legend_key_width, "cm"),
+            plot.tag = ggplot2::element_text(
+              size = 20, face = "italic", angle = 90, hjust = 0.5, vjust = 1
+            ),
+            plot.tag.position = c(-.055, 0.52),
+            plot.margin = ggplot2::unit(c(0.05, 0, 0.1, 0.75), units = "in")
+          )
+      }
+    )
+  plt <- patchwork::wrap_plots(plt_ls, ncol = 1, guides = "collect")
+  save_figure(plt, filename = sprintf("prediction_pve%s_%s_embeddings", pve_val, metric_val), width = 14, height = 7)
+}
+
+## Supplementary Prediction Accuracy Plot (across all PVEs)
+metric_val <- "rsq"
+plt_ls <- pred_results_df |>
+  dplyr::group_by(
+    .dgp_mode
+  ) |>
+  dplyr::group_map(
+    .f = function(.x, .y) {
+      dgp_mode <- .y$.dgp_mode[[1]]
+      if (stringr::str_detect(dgp_mode, "Blockwise")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", eta, ")"))
+        )
+        tag <- sprintf("(A) %s", stringr::str_replace(dgp_mode, "\n", " "))
+      } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", omega, ")"))
+        )
+        tag <- sprintf("(B) %s", stringr::str_replace(dgp_mode, "\n", " "))
+      }
+      .x |>
+        dplyr::filter(
+          .metric == !!metric_val,
+          .method_name %in% names(KEEP_METHODS3)
+        ) |>
+        ggplot2::ggplot() +
+        ggplot2::aes(
+          x = .vary_param,
+          y = mean_pred_err,
+          color = .method_name,
+          linetype = .method_name
+        ) +
+        ggplot2::geom_ribbon(
+          ggplot2::aes(
+            x = .vary_param,
+            ymin = mean_pred_err - se_pred_err,
+            ymax = mean_pred_err + se_pred_err,
+            fill = .method_name
+          ),
+          inherit.aes = FALSE,
+          alpha = 0.2
+        ) +
+        ggplot2::geom_point(size = 2) +
+        ggplot2::geom_line(linewidth = 1) +
+        ggplot2::facet_grid(
+          .dgp_name ~ pve, scales = "free", labeller = facet_labeller_abbrv
+        ) +
+        ggplot2::scale_color_manual(
+          values = rev(COLORS3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_fill_manual(
+          values = rev(COLORS3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_linetype_manual(
+          values = rev(LINETYPES3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::labs(
+          x = xlab,
+          y = "Mean Test R-squared",
+          color = "Method", fill = "Method", linetype = "Method",
+          title = tag
+        ) +
+        vthemes::theme_vmodern(size_preset = "large") +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            size = 20, face = "italic", hjust = 0.5, vjust = 1
+          ),
+          legend.key.width = ggplot2::unit(legend_key_width, "cm")
+        )
+    }
+  )
+plt <- patchwork::wrap_plots(plt_ls, ncol = 1, guides = "collect")
+save_figure(plt, filename = "prediction_full_embeddings", width = 14, height = 14)
+
+## Supplementary Prediction Accuracy Plot (across all PVEs, with different y scale)
+metric_val <- "rsq"
+plt_ls <- pred_results_df |>
+  dplyr::group_by(
+    .dgp_mode, pve
+  ) |>
+  dplyr::group_map(
+    .f = function(.x, .y) {
+      dgp_mode <- .y$.dgp_mode[[1]]
+      pve_val <- .y$pve[[1]]
+      if (stringr::str_detect(dgp_mode, "Blockwise")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", eta, ")"))
+        )
+        tag_pos <- -0.05
+        tag <- sprintf("(A) %s", stringr::str_replace(dgp_mode, "\n", " "))
+      } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", omega, ")"))
+        )
+        tag_pos <- -0.15
+        tag <- sprintf("(B) %s", stringr::str_replace(dgp_mode, "\n", " "))
+      }
+      plt <- .x |>
+        dplyr::filter(
+          .metric == !!metric_val,
+          .method_name %in% names(KEEP_METHODS3)
+        ) |>
+        dplyr::mutate(
+          pve = !!pve_val
+        ) |>
+        ggplot2::ggplot() +
+        ggplot2::aes(
+          x = .vary_param,
+          y = mean_pred_err,
+          color = .method_name,
+          linetype = .method_name
+        ) +
+        ggplot2::geom_ribbon(
+          ggplot2::aes(
+            x = .vary_param,
+            ymin = mean_pred_err - se_pred_err,
+            ymax = mean_pred_err + se_pred_err,
+            fill = .method_name
+          ),
+          inherit.aes = FALSE,
+          alpha = 0.2
+        ) +
+        ggplot2::geom_point(size = 2) +
+        ggplot2::geom_line(linewidth = 1) +
+        ggplot2::facet_grid(
+          .dgp_name ~ pve, scales = "free_y", labeller = facet_labeller_abbrv
+        ) +
+        ggplot2::scale_color_manual(
+          values = rev(COLORS3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_fill_manual(
+          values = rev(COLORS3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_linetype_manual(
+          values = rev(LINETYPES3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::labs(
+          x = xlab,
+          y = "Mean Test R-squared",
+          color = "Method", fill = "Method", linetype = "Method",
+          title = tag
+        ) +
+        vthemes::theme_vmodern(size_preset = "large") +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            size = 20, face = "italic", hjust = tag_pos, vjust = 1
+          ),
+          legend.key.width = ggplot2::unit(legend_key_width, "cm")
+        )
+      if (pve_val != 0.2) {
+        plt <- plt +
+          ggplot2::theme(
+            axis.title.y = ggplot2::element_blank()
+          )
+      }
+      if (pve_val != 0.4) {
+        plt <- plt +
+          ggplot2::theme(
+            plot.title = ggplot2::element_blank()
+          )
+      }
+      if (pve_val != 0.8) {
+        plt <- plt +
+          ggplot2::theme(
+            strip.background.y = ggplot2::element_blank(),
+            strip.text.y = ggplot2::element_blank()
+          )
+      }
+      return(plt)
+    }
+  )
+plt <- patchwork::wrap_plots(plt_ls, ncol = 4, guides = "collect", axes = "collect_x")
+save_figure(plt, filename = "prediction_full_free_embeddings", width = 15.5, height = 14)
+
+#### Prediction Accuracy Plots ####
+EMBEDDING_NDIMS <- c(1, 2, 3, 5)
+eval_results_ls <- purrr::map(
+  EMBEDDING_NDIMS,
+  function(embedding_ndim) {
+    purrr::map(
+      EXP_NAMES_MAIN,
+      function(exp_name) {
+        vary_param_name <- get_vary_param_name(exp_name)
+        exp_dir <- get_exp_dir(exp_name, embedding_ndim = embedding_ndim)
+        eval_results <- readRDS(file.path(exp_dir, "eval_results.rds")) |>
+          purrr::map(
+            ~ .x |>
+              dplyr::mutate(
+                .vary_param = .data[[vary_param_name]],
+                .dgp_mode = dplyr::case_when(
+                  stringr::str_detect(exp_name, "Blockwise") ~
+                    "Additive Blockwise\nNetwork Effect",
+                  stringr::str_detect(exp_name, "Autocorrelation") ~
+                    "Network Autocorrelation\nEffect"
+                ),
+                .method_name = dplyr::case_when(
+                  stringr::str_detect(.method_name, "NeRF") ~ sprintf("%s (Laplacian %s)", .method_name, embedding_ndim),
+                  TRUE ~ .method_name
+                )
+              )
+          )
+      }
+    )
+  }
+)
+eval_results_ls <- c(eval_results_ls[[1]], eval_results_ls[[2]], eval_results_ls[[3]], eval_results_ls[[4]])
+
+pred_results_df <- purrr::map(eval_results_ls, "Prediction Accuracy") |>
+  dplyr::bind_rows() |>
+  dplyr::mutate(
+    .method_name = factor(.method_name, levels = rev(METHOD_LEVELS)),
+    .dgp_name = forcats::fct_inorder(.dgp_name)
+  )
+
+## Main Prediction Accuracy Plot (use pve = 0.4)
+metric_val <- "rsq"
+for (pve_val in unique(pred_results_df$pve)) {
+  plt_ls <- pred_results_df |>
+    dplyr::group_by(
+      .dgp_mode
+    ) |>
+    dplyr::group_map(
+      .f = function(.x, .y) {
+        dgp_mode <- .y$.dgp_mode[[1]]
+        if (stringr::str_detect(dgp_mode, "Blockwise")) {
+          xlab <- expression(
+            bold(paste("Network Effect (", eta, ")"))
+          )
+          tag <- sprintf("(A) %s", dgp_mode)
+        } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+          xlab <- expression(
+            bold(paste("Network Effect (", omega, ")"))
+          )
+          tag <- sprintf("(B) %s", dgp_mode)
+        }
+        .x |>
+          dplyr::filter(
+            pve == !!pve_val,
+            .metric == !!metric_val,
+            .method_name %in% names(KEEP_METHODS3)
+          ) |>
+          ggplot2::ggplot() +
+          ggplot2::aes(
+            x = .vary_param,
+            y = mean_pred_err,
+            color = .method_name,
+            linetype = .method_name
+          ) +
+          ggplot2::geom_ribbon(
+            ggplot2::aes(
+              x = .vary_param,
+              ymin = mean_pred_err - se_pred_err,
+              ymax = mean_pred_err + se_pred_err,
+              fill = .method_name
+            ),
+            inherit.aes = FALSE,
+            alpha = 0.2
+          ) +
+          ggplot2::geom_point(size = 2) +
+          ggplot2::geom_line(linewidth = 1) +
+          ggplot2::facet_wrap(
+            ~ .dgp_name, scales = "free", nrow = 1, labeller = facet_labeller
+          ) +
+          ggplot2::scale_color_manual(
+            values = rev(COLORS3), labels = KEEP_METHODS3,
+            guide = ggplot2::guide_legend(reverse = TRUE)
+          ) +
+          ggplot2::scale_fill_manual(
+            values = rev(COLORS3), labels = KEEP_METHODS3,
+            guide = ggplot2::guide_legend(reverse = TRUE)
+          ) +
+          ggplot2::scale_linetype_manual(
+            values = rev(LINETYPES3), labels = KEEP_METHODS3,
+            guide = ggplot2::guide_legend(reverse = TRUE)
+          ) +
+          ggplot2::labs(
+            x = xlab,
+            y = "Mean Test R-squared",
+            color = "Method", fill = "Method", linetype = "Method",
+            tag = tag
+          ) +
+          vthemes::theme_vmodern(size_preset = "large") +
+          ggplot2::theme(
+            legend.key.width = ggplot2::unit(legend_key_width, "cm"),
+            plot.tag = ggplot2::element_text(
+              size = 20, face = "italic", angle = 90, hjust = 0.5, vjust = 1
+            ),
+            plot.tag.position = c(-.055, 0.52),
+            plot.margin = ggplot2::unit(c(0.05, 0, 0.1, 0.75), units = "in")
+          )
+      }
+    )
+  plt <- patchwork::wrap_plots(plt_ls, ncol = 1, guides = "collect")
+  save_figure(plt, filename = sprintf("prediction_pve%s_%s_embedding_ndims", pve_val, metric_val), width = 14, height = 7)
+}
+
+## Supplementary Prediction Accuracy Plot (across all PVEs)
+metric_val <- "rsq"
+plt_ls <- pred_results_df |>
+  dplyr::group_by(
+    .dgp_mode
+  ) |>
+  dplyr::group_map(
+    .f = function(.x, .y) {
+      dgp_mode <- .y$.dgp_mode[[1]]
+      if (stringr::str_detect(dgp_mode, "Blockwise")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", eta, ")"))
+        )
+        tag <- sprintf("(A) %s", stringr::str_replace(dgp_mode, "\n", " "))
+      } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", omega, ")"))
+        )
+        tag <- sprintf("(B) %s", stringr::str_replace(dgp_mode, "\n", " "))
+      }
+      .x |>
+        dplyr::filter(
+          .metric == !!metric_val,
+          .method_name %in% names(KEEP_METHODS3)
+        ) |>
+        ggplot2::ggplot() +
+        ggplot2::aes(
+          x = .vary_param,
+          y = mean_pred_err,
+          color = .method_name,
+          linetype = .method_name
+        ) +
+        ggplot2::geom_ribbon(
+          ggplot2::aes(
+            x = .vary_param,
+            ymin = mean_pred_err - se_pred_err,
+            ymax = mean_pred_err + se_pred_err,
+            fill = .method_name
+          ),
+          inherit.aes = FALSE,
+          alpha = 0.2
+        ) +
+        ggplot2::geom_point(size = 2) +
+        ggplot2::geom_line(linewidth = 1) +
+        ggplot2::facet_grid(
+          .dgp_name ~ pve, scales = "free", labeller = facet_labeller_abbrv
+        ) +
+        ggplot2::scale_color_manual(
+          values = rev(COLORS3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_fill_manual(
+          values = rev(COLORS3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_linetype_manual(
+          values = rev(LINETYPES3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::labs(
+          x = xlab,
+          y = "Mean Test R-squared",
+          color = "Method", fill = "Method", linetype = "Method",
+          title = tag
+        ) +
+        vthemes::theme_vmodern(size_preset = "large") +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            size = 20, face = "italic", hjust = 0.5, vjust = 1
+          ),
+          legend.key.width = ggplot2::unit(legend_key_width, "cm")
+        )
+    }
+  )
+plt <- patchwork::wrap_plots(plt_ls, ncol = 1, guides = "collect")
+save_figure(plt, filename = "prediction_full_embedding_ndims", width = 13, height = 14)
+
+## Supplementary Prediction Accuracy Plot (across all PVEs, with different y scale)
+metric_val <- "rsq"
+plt_ls <- pred_results_df |>
+  dplyr::group_by(
+    .dgp_mode, pve
+  ) |>
+  dplyr::group_map(
+    .f = function(.x, .y) {
+      dgp_mode <- .y$.dgp_mode[[1]]
+      pve_val <- .y$pve[[1]]
+      if (stringr::str_detect(dgp_mode, "Blockwise")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", eta, ")"))
+        )
+        tag_pos <- -0.05
+        tag <- sprintf("(A) %s", stringr::str_replace(dgp_mode, "\n", " "))
+      } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", omega, ")"))
+        )
+        tag_pos <- -0.15
+        tag <- sprintf("(B) %s", stringr::str_replace(dgp_mode, "\n", " "))
+      }
+      plt <- .x |>
+        dplyr::filter(
+          .metric == !!metric_val,
+          .method_name %in% names(KEEP_METHODS3)
+        ) |>
+        dplyr::mutate(
+          pve = !!pve_val
+        ) |>
+        ggplot2::ggplot() +
+        ggplot2::aes(
+          x = .vary_param,
+          y = mean_pred_err,
+          color = .method_name,
+          linetype = .method_name
+        ) +
+        ggplot2::geom_ribbon(
+          ggplot2::aes(
+            x = .vary_param,
+            ymin = mean_pred_err - se_pred_err,
+            ymax = mean_pred_err + se_pred_err,
+            fill = .method_name
+          ),
+          inherit.aes = FALSE,
+          alpha = 0.2
+        ) +
+        ggplot2::geom_point(size = 2) +
+        ggplot2::geom_line(linewidth = 1) +
+        ggplot2::facet_grid(
+          .dgp_name ~ pve, scales = "free_y", labeller = facet_labeller_abbrv
+        ) +
+        ggplot2::scale_color_manual(
+          values = rev(COLORS3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_fill_manual(
+          values = rev(COLORS3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_linetype_manual(
+          values = rev(LINETYPES3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::labs(
+          x = xlab,
+          y = "Mean Test R-squared",
+          color = "Method", fill = "Method", linetype = "Method",
+          title = tag
+        ) +
+        vthemes::theme_vmodern(size_preset = "large") +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            size = 20, face = "italic", hjust = tag_pos, vjust = 1
+          ),
+          legend.key.width = ggplot2::unit(legend_key_width, "cm")
+        )
+      if (pve_val != 0.2) {
+        plt <- plt +
+          ggplot2::theme(
+            axis.title.y = ggplot2::element_blank()
+          )
+      }
+      if (pve_val != 0.4) {
+        plt <- plt +
+          ggplot2::theme(
+            plot.title = ggplot2::element_blank()
+          )
+      }
+      if (pve_val != 0.8) {
+        plt <- plt +
+          ggplot2::theme(
+            strip.background.y = ggplot2::element_blank(),
+            strip.text.y = ggplot2::element_blank()
+          )
+      }
+      return(plt)
+    }
+  )
+plt <- patchwork::wrap_plots(plt_ls, ncol = 4, guides = "collect", axes = "collect_x")
+save_figure(plt, filename = "prediction_full_free_embedding_ndims", width = 14.5, height = 14)
+
+#### Prediction Accuracy Plots ####
+EMBEDDING_REGS <- c(0.01, 0.05, 0.1)
+eval_results_ls <- purrr::map(
+  EMBEDDING_REGS,
+  function(embedding_reg) {
+    purrr::map(
+      EXP_NAMES_MAIN,
+      function(exp_name) {
+        vary_param_name <- get_vary_param_name(exp_name)
+        exp_dir <- get_exp_dir(exp_name, embedding_reg = embedding_reg)
+        eval_results <- readRDS(file.path(exp_dir, "eval_results.rds")) |>
+          purrr::map(
+            ~ .x |>
+              dplyr::mutate(
+                .vary_param = .data[[vary_param_name]],
+                .dgp_mode = dplyr::case_when(
+                  stringr::str_detect(exp_name, "Blockwise") ~
+                    "Additive Blockwise\nNetwork Effect",
+                  stringr::str_detect(exp_name, "Autocorrelation") ~
+                    "Network Autocorrelation\nEffect"
+                ),
+                .method_name = dplyr::case_when(
+                  stringr::str_detect(.method_name, "NeRF") ~ sprintf("%s (lambda = %s)", .method_name, embedding_reg),
+                  TRUE ~ .method_name
+                )
+              )
+          )
+      }
+    )
+  }
+)
+eval_results_ls <- c(eval_results_ls[[1]], eval_results_ls[[2]], eval_results_ls[[3]])
+
+pred_results_df <- purrr::map(eval_results_ls, "Prediction Accuracy") |>
+  dplyr::bind_rows() |>
+  dplyr::mutate(
+    .method_name = factor(.method_name, levels = rev(METHOD_LEVELS)),
+    .dgp_name = forcats::fct_inorder(.dgp_name)
+  )
+
+## Main Prediction Accuracy Plot (use pve = 0.4)
+metric_val <- "rsq"
+for (pve_val in unique(pred_results_df$pve)) {
+  plt_ls <- pred_results_df |>
+    dplyr::group_by(
+      .dgp_mode
+    ) |>
+    dplyr::group_map(
+      .f = function(.x, .y) {
+        dgp_mode <- .y$.dgp_mode[[1]]
+        if (stringr::str_detect(dgp_mode, "Blockwise")) {
+          xlab <- expression(
+            bold(paste("Network Effect (", eta, ")"))
+          )
+          tag <- sprintf("(A) %s", dgp_mode)
+        } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+          xlab <- expression(
+            bold(paste("Network Effect (", omega, ")"))
+          )
+          tag <- sprintf("(B) %s", dgp_mode)
+        }
+        .x |>
+          dplyr::filter(
+            pve == !!pve_val,
+            .metric == !!metric_val,
+            .method_name %in% names(KEEP_METHODS3)
+          ) |>
+          ggplot2::ggplot() +
+          ggplot2::aes(
+            x = .vary_param,
+            y = mean_pred_err,
+            color = .method_name,
+            linetype = .method_name
+          ) +
+          ggplot2::geom_ribbon(
+            ggplot2::aes(
+              x = .vary_param,
+              ymin = mean_pred_err - se_pred_err,
+              ymax = mean_pred_err + se_pred_err,
+              fill = .method_name
+            ),
+            inherit.aes = FALSE,
+            alpha = 0.2
+          ) +
+          ggplot2::geom_point(size = 2) +
+          ggplot2::geom_line(linewidth = 1) +
+          ggplot2::facet_wrap(
+            ~ .dgp_name, scales = "free", nrow = 1, labeller = facet_labeller
+          ) +
+          ggplot2::scale_color_manual(
+            values = rev(COLORS3), labels = KEEP_METHODS3,
+            guide = ggplot2::guide_legend(reverse = TRUE)
+          ) +
+          ggplot2::scale_fill_manual(
+            values = rev(COLORS3), labels = KEEP_METHODS3,
+            guide = ggplot2::guide_legend(reverse = TRUE)
+          ) +
+          ggplot2::scale_linetype_manual(
+            values = rev(LINETYPES3), labels = KEEP_METHODS3,
+            guide = ggplot2::guide_legend(reverse = TRUE)
+          ) +
+          ggplot2::labs(
+            x = xlab,
+            y = "Mean Test R-squared",
+            color = "Method", fill = "Method", linetype = "Method",
+            tag = tag
+          ) +
+          vthemes::theme_vmodern(size_preset = "large") +
+          ggplot2::theme(
+            legend.key.width = ggplot2::unit(legend_key_width, "cm"),
+            plot.tag = ggplot2::element_text(
+              size = 20, face = "italic", angle = 90, hjust = 0.5, vjust = 1
+            ),
+            plot.tag.position = c(-.055, 0.52),
+            plot.margin = ggplot2::unit(c(0.05, 0, 0.1, 0.75), units = "in")
+          )
+      }
+    )
+  plt <- patchwork::wrap_plots(plt_ls, ncol = 1, guides = "collect")
+  save_figure(plt, filename = sprintf("prediction_pve%s_%s_embedding_regs", pve_val, metric_val), width = 14, height = 7)
+}
+
+## Supplementary Prediction Accuracy Plot (across all PVEs)
+metric_val <- "rsq"
+plt_ls <- pred_results_df |>
+  dplyr::group_by(
+    .dgp_mode
+  ) |>
+  dplyr::group_map(
+    .f = function(.x, .y) {
+      dgp_mode <- .y$.dgp_mode[[1]]
+      if (stringr::str_detect(dgp_mode, "Blockwise")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", eta, ")"))
+        )
+        tag <- sprintf("(A) %s", stringr::str_replace(dgp_mode, "\n", " "))
+      } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", omega, ")"))
+        )
+        tag <- sprintf("(B) %s", stringr::str_replace(dgp_mode, "\n", " "))
+      }
+      .x |>
+        dplyr::filter(
+          .metric == !!metric_val,
+          .method_name %in% names(KEEP_METHODS3)
+        ) |>
+        ggplot2::ggplot() +
+        ggplot2::aes(
+          x = .vary_param,
+          y = mean_pred_err,
+          color = .method_name,
+          linetype = .method_name
+        ) +
+        ggplot2::geom_ribbon(
+          ggplot2::aes(
+            x = .vary_param,
+            ymin = mean_pred_err - se_pred_err,
+            ymax = mean_pred_err + se_pred_err,
+            fill = .method_name
+          ),
+          inherit.aes = FALSE,
+          alpha = 0.2
+        ) +
+        ggplot2::geom_point(size = 2) +
+        ggplot2::geom_line(linewidth = 1) +
+        ggplot2::facet_grid(
+          .dgp_name ~ pve, scales = "free", labeller = facet_labeller_abbrv
+        ) +
+        ggplot2::scale_color_manual(
+          values = rev(COLORS3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_fill_manual(
+          values = rev(COLORS3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_linetype_manual(
+          values = rev(LINETYPES3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::labs(
+          x = xlab,
+          y = "Mean Test R-squared",
+          color = "Method", fill = "Method", linetype = "Method",
+          title = tag
+        ) +
+        vthemes::theme_vmodern(size_preset = "large") +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            size = 20, face = "italic", hjust = 0.5, vjust = 1
+          ),
+          legend.key.width = ggplot2::unit(legend_key_width, "cm")
+        )
+    }
+  )
+plt <- patchwork::wrap_plots(plt_ls, ncol = 1, guides = "collect")
+save_figure(plt, filename = "prediction_full_embedding_regs", width = 13, height = 14)
+
+## Supplementary Prediction Accuracy Plot (across all PVEs, with different y scale)
+metric_val <- "rsq"
+plt_ls <- pred_results_df |>
+  dplyr::group_by(
+    .dgp_mode, pve
+  ) |>
+  dplyr::group_map(
+    .f = function(.x, .y) {
+      dgp_mode <- .y$.dgp_mode[[1]]
+      pve_val <- .y$pve[[1]]
+      if (stringr::str_detect(dgp_mode, "Blockwise")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", eta, ")"))
+        )
+        tag_pos <- -0.05
+        tag <- sprintf("(A) %s", stringr::str_replace(dgp_mode, "\n", " "))
+      } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", omega, ")"))
+        )
+        tag_pos <- -0.15
+        tag <- sprintf("(B) %s", stringr::str_replace(dgp_mode, "\n", " "))
+      }
+      plt <- .x |>
+        dplyr::filter(
+          .metric == !!metric_val,
+          .method_name %in% names(KEEP_METHODS3)
+        ) |>
+        dplyr::mutate(
+          pve = !!pve_val
+        ) |>
+        ggplot2::ggplot() +
+        ggplot2::aes(
+          x = .vary_param,
+          y = mean_pred_err,
+          color = .method_name,
+          linetype = .method_name
+        ) +
+        ggplot2::geom_ribbon(
+          ggplot2::aes(
+            x = .vary_param,
+            ymin = mean_pred_err - se_pred_err,
+            ymax = mean_pred_err + se_pred_err,
+            fill = .method_name
+          ),
+          inherit.aes = FALSE,
+          alpha = 0.2
+        ) +
+        ggplot2::geom_point(size = 2) +
+        ggplot2::geom_line(linewidth = 1) +
+        ggplot2::facet_grid(
+          .dgp_name ~ pve, scales = "free_y", labeller = facet_labeller_abbrv
+        ) +
+        ggplot2::scale_color_manual(
+          values = rev(COLORS3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_fill_manual(
+          values = rev(COLORS3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_linetype_manual(
+          values = rev(LINETYPES3), labels = KEEP_METHODS3,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::labs(
+          x = xlab,
+          y = "Mean Test R-squared",
+          color = "Method", fill = "Method", linetype = "Method",
+          title = tag
+        ) +
+        vthemes::theme_vmodern(size_preset = "large") +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            size = 20, face = "italic", hjust = tag_pos, vjust = 1
+          ),
+          legend.key.width = ggplot2::unit(legend_key_width, "cm")
+        )
+      if (pve_val != 0.2) {
+        plt <- plt +
+          ggplot2::theme(
+            axis.title.y = ggplot2::element_blank()
+          )
+      }
+      if (pve_val != 0.4) {
+        plt <- plt +
+          ggplot2::theme(
+            plot.title = ggplot2::element_blank()
+          )
+      }
+      if (pve_val != 0.8) {
+        plt <- plt +
+          ggplot2::theme(
+            strip.background.y = ggplot2::element_blank(),
+            strip.text.y = ggplot2::element_blank()
+          )
+      }
+      return(plt)
+    }
+  )
+plt <- patchwork::wrap_plots(plt_ls, ncol = 4, guides = "collect", axes = "collect_x")
+save_figure(plt, filename = "prediction_full_free_embedding_regs", width = 14.5, height = 14)
+
+###########################################################################
+######################### Logistic Simulation Results #########################
+###########################################################################
+# exp_name <- EXP_NAMES_MAIN[1]
+# vary_param_name <- get_vary_param_name(exp_name)
+# exp_dir <- get_exp_dir(exp_name)
+# fit_results <- readRDS(file.path(exp_dir, "fit_results.rds"))
+# fit_results |>
+#   dplyr::group_by(.method_name) |>
+#   dplyr::summarise(
+#     time_elapsed = mean(unlist(time_elapsed))
+#   )
+
+EXP_NAMES_LOGISTIC <- c(
+  "Logistic Additive Blockwise Network DGP",
+  "Logistic LSS Additive Blockwise Network DGP",
+  "Logistic Polynomial Additive Blockwise Network DGP"
+)
+
+# fit_results_ls <- purrr::map(
+#   EXP_NAMES_LOGISTIC,
+#   function(exp_name) {
+#     vary_param_name <- get_vary_param_name(exp_name)
+#     exp_dir <- get_exp_dir(exp_name, with_pve = FALSE)
+#     fit_results <- readRDS(file.path(exp_dir, "fit_results.rds"))
+#   }
+# )
+# dplyr::bind_rows(fit_results_ls) |>
+#   dplyr::group_by(.method_name) |>
+#   dplyr::summarise(
+#     time_elapsed = mean(unlist(time_elapsed))
+#   )
+
+eval_results_ls <- purrr::map(
+  EXP_NAMES_LOGISTIC,
+  function(exp_name) {
+    vary_param_name <- get_vary_param_name(exp_name)
+    exp_dir <- get_exp_dir(exp_name, vary_param_name = vary_param_name, with_pve = FALSE)
+    eval_results <- readRDS(file.path(exp_dir, "eval_results.rds"))
+  }
+)
+
+#### Prediction Accuracy Plots ####
+pred_results_df <- purrr::map(eval_results_ls, "Prediction Accuracy") |>
+  dplyr::bind_rows() |>
+  dplyr::mutate(
+    .method_name = factor(.method_name, levels = rev(METHOD_LEVELS)),
+    .dgp_name = dplyr::case_when(
+      stringr::str_detect(.dgp_name, "LSS") ~ "Locally Spiky Sparse",
+      stringr::str_detect(.dgp_name, "Poly") ~ "Polynomial",
+      TRUE ~ "Linear"
+    ) |>
+      factor(levels = c("Linear", "Polynomial", "Locally Spiky Sparse")),
+    .metric = dplyr::case_when(
+      .metric == "kap" ~ "Kappa",
+      .metric == "mn_log_loss" ~ "Log-Loss",
+      .metric == "roc_auc" ~ "AUROC",
+      TRUE ~ stringr::str_to_title(.metric)
+    )
+  )
+
+## Main Prediction Accuracy Plot
+class_metric <- "Accuracy"
+plt <- pred_results_df |>
+  dplyr::filter(
+    .metric == !!class_metric,
+    .method_name %in% names(KEEP_METHODS)
+  ) |>
+  ggplot2::ggplot() +
+  ggplot2::aes(
+    x = centroids_scale,
+    y = mean_pred_err,
+    color = .method_name,
+    linetype = .method_name
+  ) +
+  ggplot2::geom_ribbon(
+    ggplot2::aes(
+      x = centroids_scale,
+      ymin = mean_pred_err - se_pred_err,
+      ymax = mean_pred_err + se_pred_err,
+      fill = .method_name
+    ),
+    inherit.aes = FALSE,
+    alpha = 0.2
+  ) +
+  ggplot2::geom_point(size = 2) +
+  ggplot2::geom_line(linewidth = 1) +
+  ggplot2::facet_grid(
+    ~ .dgp_name, scales = "free"#, labeller = facet_labeller
+  ) +
+  ggplot2::scale_color_manual(
+    values = rev(COLORS), labels = KEEP_METHODS,
+    guide = ggplot2::guide_legend(reverse = TRUE)
+  ) +
+  ggplot2::scale_fill_manual(
+    values = rev(COLORS), labels = KEEP_METHODS,
+    guide = ggplot2::guide_legend(reverse = TRUE)
+  ) +
+  ggplot2::scale_linetype_manual(
+    values = rev(LINETYPES), labels = KEEP_METHODS,
+    guide = ggplot2::guide_legend(reverse = TRUE)
+  ) +
+  ggplot2::labs(
+    x = expression(bold(paste("Network Effect (", eta, ")"))),
+    y = sprintf("Mean Test %s", class_metric),
+    color = "Method", fill = "Method", linetype = "Method"
+  ) +
+  vthemes::theme_vmodern(size_preset = "large") +
+  ggplot2::theme(
+    legend.key.width = ggplot2::unit(legend_key_width, "cm"),
+    plot.tag = ggplot2::element_text(
+      size = 20, face = "italic", angle = 90, hjust = 0.5, vjust = 1
+    ),
+    plot.tag.position = c(-.055, 0.52),
+    plot.margin = ggplot2::unit(c(0.05, 0, 0.1, 0.75), units = "in")
+  )
+save_figure(plt, filename = "prediction_logistic", width = 14, height = 4)
+
+#### Feature Importance Plots ####
+fi_results_df <- purrr::map(
+  eval_results_ls,
+  ~ dplyr::bind_rows(
+    list(
+      `Permutation Importance` = .x$`Permutation Feature Importances`,
+      `MDI+ Importance` = .x$`MDI+ Feature Importances`
+    ),
+    .id = ".fi_mode"
+  )
+) |>
+  dplyr::bind_rows() |>
+  dplyr::mutate(
+    .method_name = factor(.method_name, levels = METHOD_LEVELS),
+    .dgp_name = forcats::fct_inorder(.dgp_name),
+    var = dplyr::case_when(
+      var == ".network" ~ "Network",
+      var == ".alpha" ~ "Network Cohesion",
+      var == ".embed" ~ "Network Embedding",
+      TRUE ~ stringr::str_replace(var, "V", "X")
+    ) |>
+      factor(
+        levels = c(
+          "Network Cohesion", "Network Embedding", "Network",
+          paste0("X", 1:10)
+        )
+      ),
+    .fill = dplyr::case_when(
+      stringr::str_detect(var, "Network") ~ "Network",
+      stringr::str_detect(.dgp_name, "LSS") &
+        as.numeric(stringr::str_extract(var, "[0-9]+")) <= 6 ~ "Signal",
+      stringr::str_detect(.dgp_name, "Polynomial") &
+        as.numeric(stringr::str_extract(var, "[0-9]+")) <= 6 ~ "Signal",
+      stringr::str_detect(.dgp_name, "Logistic") &
+        as.numeric(stringr::str_extract(var, "[0-9]+")) <= 2 ~ "Signal",
+      TRUE ~ "Non-signal"
+    ) |>
+      factor(levels = c("Network", "Signal", "Non-signal"))
+  ) |>
+  dplyr::filter(!is.na(var)) |>
+  dplyr::arrange(.fill, centroids_scale, omega)
+
+## Main Feature Importance Plot (use pve = 0.4)
+blue_pal <- c(
+  "#BCE0E9", "#89C9d9", "#57B2C8", "#235663", "#132E35"
+)
+orange_pal <- c(
+  "#FFD499", "#FFB34D", "#FF9300", "#B36700", "#754400"
+)
+gray_pal <- c(
+  "#CFCFCF", "#8f8f8f", "#5f5f5f", "#3B3B3B", "#242424"
+)
+color_pal3 <- c(blue_pal[c(1, 3, 4)], orange_pal[c(1, 3, 4)], gray_pal[c(1, 3, 5)])
+color_pal4 <- c(blue_pal[1:4], orange_pal[1:4], gray_pal[1:4])
+color_pal5 <- c(blue_pal, orange_pal, gray_pal)
+plt_df <- fi_results_df |>
+  dplyr::mutate(
+    .bar_vary_param = dplyr::case_when(
+      centroids_scale == 0.5 ~ "Weak",
+      centroids_scale == 1 ~ "Moderate",
+      centroids_scale == 1.5 ~ "Strong"
+    ) |>
+      factor(levels = c("Weak", "Moderate", "Strong"))
+  ) |>
+  dplyr::filter(
+    !is.na(.bar_vary_param)
+  )
+
+plt_ls <- plt_df |>
+  dplyr::filter(
+    !(var %in% c("Network Cohesion", "Network Embedding", "X9", "X10")),
+    .method_name == "NeRF+",
+  ) |>
+  dplyr::mutate(
+    .dgp_name = dplyr::case_when(
+      stringr::str_detect(.dgp_name, "Polynomial") ~ "Polynomial",
+      stringr::str_detect(.dgp_name, "LSS") ~ "Locally Spiky Sparse (LSS)",
+      stringr::str_detect(.dgp_name, "Logistic") ~ "Logistic",
+    ) |>
+      factor(levels = c("Logistic", "Polynomial", "Locally Spiky Sparse (LSS)"))
+  ) |>
+  dplyr::group_by(
+    .fi_mode
+  ) |>
+  dplyr::group_map(
+    .f = function(.x, .y) {
+      fi_mode <- .y$.fi_mode[[1]]
+      fill_lab <- expression(
+        bold(paste("Network Effect (", eta, ")"))
+      )
+      # tag <- "Additive Blockwise\nNetwork Effect"
+      color_pal <- color_pal3
+      if (fi_mode == "Permutation Importance") {
+        x_axis_theme <- ggplot2::theme(
+          axis.text.x = ggplot2::element_text(angle = 90, vjust = 0.5, hjust = 1),
+          axis.title.x = ggplot2::element_blank()
+        )
+        legend_position <- "none"
+      } else {
+        x_axis_theme <- ggplot2::theme(
+          axis.text.x = ggplot2::element_text(angle = 90, vjust = 0.5, hjust = 1)
+        )
+        legend_position <- "bottom"
+      }
+      # tag_position <- c(-.065, 0.57)
+      .x |>
+        dplyr::mutate(
+          .fill = forcats::fct_inorder(paste(.fill, .bar_vary_param))
+        ) |>
+        ggplot2::ggplot() +
+        ggplot2::aes(
+          x = var,
+          y = mean_feature_importance,
+          fill = .fill
+        ) +
+        ggplot2::geom_errorbar(
+          ggplot2::aes(
+            x = var,
+            ymin = mean_feature_importance - se_feature_importance,
+            ymax = mean_feature_importance + se_feature_importance,
+            color = .fill,
+            group = .fill
+          ),
+          inherit.aes = FALSE,
+          width = 0,
+          position = ggplot2::position_dodge(0.9)
+        ) +
+        ggplot2::geom_bar(
+          linewidth = 0.2,
+          stat = "identity",
+          position = ggplot2::position_dodge(0.9)
+        ) +
+        ggplot2::facet_wrap(
+          ~ .dgp_name, scales = "free_y", nrow = 1
+        ) +
+        ggplot2::scale_color_manual(
+          values = color_pal
+        ) +
+        ggplot2::scale_fill_manual(
+          values = color_pal
+        ) +
+        ggplot2::scale_x_discrete(
+          labels = c(
+            "Network" = expression(paste("(", alpha, ", Z)")),
+            "Network Cohesion" = expression(alpha),
+            "Network Embedding" = "Z"
+          )
+        ) +
+        ggplot2::labs(
+          x = "Feature",
+          y = stringr::str_replace(fi_mode, " ", "\n"),
+          # tag = tag
+        ) +
+        vthemes::theme_vmodern(size_preset = "large") +
+        x_axis_theme +
+        ggplot2::theme(
+          axis.text.y = ggplot2::element_text(size = 12),
+          # plot.tag = ggplot2::element_text(
+          #   size = 20, face = "italic", angle = 90, hjust = 0.5, vjust = 1
+          # ),
+          # plot.tag.position = tag_position,
+          # plot.margin = ggplot2::unit(c(0.05, 0, 0.1, 0.75), units = "in"),
+          legend.position = legend_position
+        )
+    }
+  )
+
+plt_network_ls <- plt_df |>
+  dplyr::filter(
+    .method_name == "NeRF+"
+  ) |>
+  dplyr::mutate(
+    .dgp_name = dplyr::case_when(
+      stringr::str_detect(.dgp_name, "Polynomial") ~ "Poly.",
+      stringr::str_detect(.dgp_name, "LSS") ~ "LSS",
+      stringr::str_detect(.dgp_name, "Logistic") ~ "Logistic",
+    ) |>
+      factor(levels = c("Logistic", "Poly.", "LSS")),
+  ) |>
+  dplyr::group_by(
+    .fi_mode
+  ) |>
+  dplyr::group_map(
+    .f = function(.x, .y) {
+      fi_mode <- .y$.fi_mode[[1]]
+      fill_lab <- expression(
+        bold(paste("Network Effect (", eta, ")"))
+      )
+      # tag <- sprintf("(A) %s", "Additive Blockwise\nNetwork Effect")
+      color_pal <- color_pal3
+      if (fi_mode == "Permutation Importance") {
+        x_axis_theme <- ggplot2::theme(
+          axis.title.x = ggplot2::element_blank()
+        )
+        legend_position <- "none"
+      } else {
+        x_axis_theme <- ggplot2::theme()
+        legend_position <- "bottom"
+      }
+      .x |>
+        dplyr::filter(
+          var %in% c("Network Cohesion", "Network Embedding")
+        ) |>
+        ggplot2::ggplot() +
+        ggplot2::aes(
+          x = .bar_vary_param,
+          y = mean_feature_importance,
+          color = .bar_vary_param,
+          group = var,
+          pattern = var,
+          pattern_color = .bar_vary_param,
+          pattern_fill = .bar_vary_param
+        ) +
+        ggplot2::geom_point(
+          ggplot2::aes(
+            x = .bar_vary_param,
+            y = mean_feature_importance + se_feature_importance
+          ),
+          size = 0,
+          color = "transparent",
+          data = .x,
+          inherit.aes = FALSE
+        ) +
+        ggplot2::geom_errorbar(
+          ggplot2::aes(
+            x = .bar_vary_param,
+            ymin = mean_feature_importance,
+            ymax = mean_feature_importance + se_feature_importance,
+            color = .bar_vary_param,
+            group = var
+          ),
+          inherit.aes = FALSE,
+          width = 0,
+          position = ggplot2::position_dodge(0.9)
+        ) +
+        ggpattern::geom_bar_pattern(
+          pattern_density = 0.1,
+          pattern_spacing = 0.1,
+          fill = "transparent",
+          stat = "identity",
+          position = ggplot2::position_dodge(0.9)
+        ) +
+        ggplot2::facet_wrap(
+          ~ .dgp_name, scales = "free_y", nrow = 1
+        ) +
+        ggplot2::scale_color_manual(
+          values = color_pal
+        ) +
+        ggplot2::scale_fill_manual(
+          values = color_pal
+        ) +
+        ggpattern::scale_pattern_manual(
+          values = c(
+            "Network Cohesion" = "none",
+            "Network Embedding" = "stripe"
+          ),
+          labels = c(
+            "Network Cohesion" = expression(alpha),
+            "Network Embedding" = "Z"
+          )
+        ) +
+        ggpattern::scale_pattern_color_manual(
+          values = color_pal
+        ) +
+        ggpattern::scale_pattern_fill_manual(
+          values = color_pal
+        ) +
+        ggplot2::labs(
+          x = "Network Effect",
+          y = stringr::str_replace(fi_mode, " ", "\n"),
+          color = "", fill = "", pattern = "", pattern_color = ""
+        ) +
+        vthemes::theme_vmodern(size_preset = "large") +
+        x_axis_theme +
+        ggplot2::theme(
+          axis.text.x = ggplot2::element_text(angle = 90, vjust = 0.5, hjust = 1),
+          axis.text.y = ggplot2::element_text(size = 12),
+          axis.title.y = ggplot2::element_blank(),
+          legend.position = legend_position
+        )
+    }
+  )
+
+plt <- patchwork::wrap_plots(
+  c(
+    plt_ls[2:1],
+    list(patchwork::plot_spacer(), patchwork::plot_spacer()),
+    plt_network_ls[2:1]
+  ),
+  nrow = 2, ncol = 3, byrow = FALSE, widths = c(0.73, 0.02, 0.25)
+)
+save_figure(
+  plt, filename = "fi_logistic",
+  width = 16, height = 9
+)
+
+###########################################################################
+############################## Timing Results #############################
+###########################################################################
+timing_df <- readRDS(
+  file.path(RESULTS_DIR, "Timing Simulations", "results.rds")
+)
+timing_df |>
+  dplyr::filter(
+    method %in% c("NeRF+", "Network BART"),
+  ) |>
+  dplyr::group_by(method, n) |>
+  dplyr::summarise(
+    mean_time = mean(elapsed_time / 60, na.rm = TRUE),
+    se_time = sd(elapsed_time / 60, na.rm = TRUE) / sqrt(length(elapsed_time)),
+    .groups = "drop"
+  ) |>
+  dplyr::mutate(
+    `Time Elapsed (min)` = sprintf("%.2f (%.3f)", mean_time, se_time)
+  ) |>
+  dplyr::select(-mean_time, -se_time) |>
+  tidyr::pivot_wider(
+    names_from = method,
+    values_from = `Time Elapsed (min)`,
+    values_fill = "DNF"
+  ) |>
+  dplyr::rename(
+    `Sample Size (n)` = n
+  ) |>
+  knitr::kable(
+    format = "latex",
+    booktabs = TRUE
+  )
+
+###########################################################################
+######################### BAMDT Simulation Results ########################
+###########################################################################
+EXP_NAMES_BAMDT <- c(
+  "Linear Additive Blockwise Network DGP",
+  "Polynomial Additive Blockwise Network DGP",
+  "LSS Additive Blockwise Network DGP"
+)
+
+timing_results_ls <- purrr::map(
+  EXP_NAMES_BAMDT,
+  function(exp_name) {
+    vary_param_name <- get_vary_param_name(exp_name)
+    exp_dir <- get_exp_dir(exp_name, root_dir = "BAMDT Simulations")
+    fit_results <- readRDS(file.path(exp_dir, "fit_results.rds")) |>
+      dplyr::group_by(.dgp_name, .method_name) |>
+      dplyr::summarise(
+        time_elapsed = mean(unlist(time_elapsed))
+      )
+  }
+) |>
+  dplyr::bind_rows()
+
+
+eval_results_ls <- purrr::map(
+  EXP_NAMES_BAMDT,
+  function(exp_name) {
+    vary_param_name <- get_vary_param_name(exp_name)
+    exp_dir <- get_exp_dir(exp_name, root_dir = "BAMDT Simulations")
+    eval_results <- readRDS(file.path(exp_dir, "eval_results.rds")) |>
+      purrr::map(
+        ~ .x |>
+          dplyr::mutate(
+            .vary_param = .data[[vary_param_name]],
+            .dgp_mode = dplyr::case_when(
+              stringr::str_detect(exp_name, "Blockwise") ~
+                "Additive Blockwise\nNetwork Effect",
+              stringr::str_detect(exp_name, "Autocorrelation") ~
+                "Network Autocorrelation\nEffect"
+            )
+          )
+      )
+  }
+)
+
+#### Prediction Accuracy Plots ####
+pred_results_df <- purrr::map(eval_results_ls, "Prediction Accuracy") |>
+  dplyr::bind_rows() |>
+  dplyr::mutate(
+    .method_name = factor(.method_name, levels = rev(METHOD_LEVELS)),
+    .dgp_name = forcats::fct_inorder(.dgp_name)
+  )
+
+## Main Prediction Accuracy Plot (use pve = 0.4)
+metric_val <- "rsq"
+ylab <- dplyr::case_when(
+  metric_val == "rsq" ~ "R-squared",
+  metric_val == "rmse" ~ "RMSE"
+)
+for (pve_val in unique(pred_results_df$pve)) {
+  plt_ls <- pred_results_df |>
+    dplyr::group_by(
+      .dgp_mode
+    ) |>
+    dplyr::group_map(
+      .f = function(.x, .y) {
+        dgp_mode <- .y$.dgp_mode[[1]]
+        if (stringr::str_detect(dgp_mode, "Blockwise")) {
+          xlab <- expression(
+            bold(paste("Network Effect (", eta, ")"))
+          )
+          tag <- sprintf("(A) %s", dgp_mode)
+        } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+          xlab <- expression(
+            bold(paste("Network Effect (", omega, ")"))
+          )
+          tag <- sprintf("(B) %s", dgp_mode)
+        }
+        .x |>
+          dplyr::filter(
+            pve == !!pve_val,
+            .metric == !!metric_val,
+            .method_name %in% names(KEEP_METHODS)
+          ) |>
+          ggplot2::ggplot() +
+          ggplot2::aes(
+            x = .vary_param,
+            y = mean_pred_err,
+            color = .method_name,
+            linetype = .method_name
+          ) +
+          ggplot2::geom_ribbon(
+            ggplot2::aes(
+              x = .vary_param,
+              ymin = mean_pred_err - se_pred_err,
+              ymax = mean_pred_err + se_pred_err,
+              fill = .method_name
+            ),
+            inherit.aes = FALSE,
+            alpha = 0.2
+          ) +
+          ggplot2::geom_point(size = 2) +
+          ggplot2::geom_line(linewidth = 1) +
+          ggplot2::facet_wrap(
+            ~ .dgp_name, scales = "free", nrow = 1, labeller = facet_labeller
+          ) +
+          ggplot2::scale_color_manual(
+            values = rev(COLORS), labels = KEEP_METHODS,
+            guide = ggplot2::guide_legend(reverse = TRUE)
+          ) +
+          ggplot2::scale_fill_manual(
+            values = rev(COLORS), labels = KEEP_METHODS,
+            guide = ggplot2::guide_legend(reverse = TRUE)
+          ) +
+          ggplot2::scale_linetype_manual(
+            values = rev(LINETYPES), labels = KEEP_METHODS,
+            guide = ggplot2::guide_legend(reverse = TRUE)
+          ) +
+          ggplot2::labs(
+            x = xlab,
+            y = sprintf("Mean Test %s", ylab),
+            color = "Method", fill = "Method", linetype = "Method",
+            tag = tag
+          ) +
+          vthemes::theme_vmodern(size_preset = "large") +
+          ggplot2::theme(
+            legend.key.width = ggplot2::unit(legend_key_width, "cm"),
+            plot.tag = ggplot2::element_text(
+              size = 20, face = "italic", angle = 90, hjust = 0.5, vjust = 1
+            ),
+            plot.tag.position = c(-.055, 0.52),
+            plot.margin = ggplot2::unit(c(0.05, 0, 0.1, 0.75), units = "in")
+          )
+      }
+    )
+  plt <- patchwork::wrap_plots(plt_ls, ncol = 1, guides = "collect")
+  save_figure(plt, filename = sprintf("bamdt_prediction_pve%s_%s", pve_val, metric_val), width = 14, height = 4)
+}
+
+## Supplementary Prediction Accuracy Plot (across all PVEs)
+metric_val <- "rsq"
+plt_ls <- pred_results_df |>
+  dplyr::group_by(
+    .dgp_mode
+  ) |>
+  dplyr::group_map(
+    .f = function(.x, .y) {
+      dgp_mode <- .y$.dgp_mode[[1]]
+      if (stringr::str_detect(dgp_mode, "Blockwise")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", eta, ")"))
+        )
+        tag <- sprintf("%s", stringr::str_replace(dgp_mode, "\n", " "))
+      } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", omega, ")"))
+        )
+        tag <- sprintf("%s", stringr::str_replace(dgp_mode, "\n", " "))
+      }
+      .x |>
+        dplyr::filter(
+          .metric == !!metric_val,
+          .method_name %in% names(KEEP_METHODS)
+        ) |>
+        ggplot2::ggplot() +
+        ggplot2::aes(
+          x = .vary_param,
+          y = mean_pred_err,
+          color = .method_name,
+          linetype = .method_name
+        ) +
+        ggplot2::geom_ribbon(
+          ggplot2::aes(
+            x = .vary_param,
+            ymin = mean_pred_err - se_pred_err,
+            ymax = mean_pred_err + se_pred_err,
+            fill = .method_name
+          ),
+          inherit.aes = FALSE,
+          alpha = 0.2
+        ) +
+        ggplot2::geom_point(size = 2) +
+        ggplot2::geom_line(linewidth = 1) +
+        ggplot2::facet_grid(
+          .dgp_name ~ pve, scales = "free", labeller = facet_labeller_abbrv
+        ) +
+        ggplot2::scale_color_manual(
+          values = rev(COLORS), labels = KEEP_METHODS,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_fill_manual(
+          values = rev(COLORS), labels = KEEP_METHODS,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_linetype_manual(
+          values = rev(LINETYPES), labels = KEEP_METHODS,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::labs(
+          x = xlab,
+          y = "Mean Test R-squared",
+          color = "Method", fill = "Method", linetype = "Method",
+          title = tag
+        ) +
+        vthemes::theme_vmodern(size_preset = "large") +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            size = 20, face = "italic", hjust = 0.5, vjust = 1
+          ),
+          legend.key.width = ggplot2::unit(legend_key_width, "cm")
+        )
+    }
+  )
+plt <- patchwork::wrap_plots(plt_ls, ncol = 1, guides = "collect")
+save_figure(plt, filename = "bamdt_prediction_full", width = 13, height = 7)
+
+## Supplementary Prediction Accuracy Plot (across all PVEs, with different y scale)
+metric_val <- "rsq"
+plt_ls <- pred_results_df |>
+  dplyr::group_by(
+    .dgp_mode, pve
+  ) |>
+  dplyr::group_map(
+    .f = function(.x, .y) {
+      dgp_mode <- .y$.dgp_mode[[1]]
+      pve_val <- .y$pve[[1]]
+      if (stringr::str_detect(dgp_mode, "Blockwise")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", eta, ")"))
+        )
+        tag_pos <- -0.05
+        tag <- sprintf("%s", stringr::str_replace(dgp_mode, "\n", " "))
+      } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+        xlab <- expression(
+          bold(paste("Network Effect (", omega, ")"))
+        )
+        tag_pos <- -0.15
+        tag <- sprintf("%s", stringr::str_replace(dgp_mode, "\n", " "))
+      }
+      plt <- .x |>
+        dplyr::filter(
+          .metric == !!metric_val,
+          .method_name %in% names(KEEP_METHODS)
+        ) |>
+        dplyr::mutate(
+          pve = !!pve_val
+        ) |>
+        ggplot2::ggplot() +
+        ggplot2::aes(
+          x = .vary_param,
+          y = mean_pred_err,
+          color = .method_name,
+          linetype = .method_name
+        ) +
+        ggplot2::geom_ribbon(
+          ggplot2::aes(
+            x = .vary_param,
+            ymin = mean_pred_err - se_pred_err,
+            ymax = mean_pred_err + se_pred_err,
+            fill = .method_name
+          ),
+          inherit.aes = FALSE,
+          alpha = 0.2
+        ) +
+        ggplot2::geom_point(size = 2) +
+        ggplot2::geom_line(linewidth = 1) +
+        ggplot2::facet_grid(
+          .dgp_name ~ pve, scales = "free_y", labeller = facet_labeller_abbrv
+        ) +
+        ggplot2::scale_color_manual(
+          values = rev(COLORS), labels = KEEP_METHODS,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_fill_manual(
+          values = rev(COLORS), labels = KEEP_METHODS,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::scale_linetype_manual(
+          values = rev(LINETYPES), labels = KEEP_METHODS,
+          guide = ggplot2::guide_legend(reverse = TRUE)
+        ) +
+        ggplot2::labs(
+          x = xlab,
+          y = "Mean Test R-squared",
+          color = "Method", fill = "Method", linetype = "Method",
+          title = tag
+        ) +
+        vthemes::theme_vmodern(size_preset = "large") +
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            size = 20, face = "italic", hjust = tag_pos, vjust = 1
+          ),
+          legend.key.width = ggplot2::unit(legend_key_width, "cm")
+        )
+      if (pve_val != 0.2) {
+        plt <- plt +
+          ggplot2::theme(
+            axis.title.y = ggplot2::element_blank()
+          )
+      }
+      if (pve_val != 0.4) {
+        plt <- plt +
+          ggplot2::theme(
+            plot.title = ggplot2::element_blank()
+          )
+      }
+      if (pve_val != 0.8) {
+        plt <- plt +
+          ggplot2::theme(
+            strip.background.y = ggplot2::element_blank(),
+            strip.text.y = ggplot2::element_blank()
+          )
+      }
+      return(plt)
+    }
+  )
+plt <- patchwork::wrap_plots(plt_ls, ncol = 4, guides = "collect", axes = "collect_x")
+save_figure(plt, filename = "bamdt_prediction_full_free", width = 14.5, height = 7)
+
+#### Feature Importance Plots ####
+simChef::load_all()
+source(here::here("meals", "shared_evaluators.R"))
+
+eval_results_ls <- purrr::map(
+  EXP_NAMES_BAMDT,
+  function(exp_name) {
+    vary_param_name <- get_vary_param_name(exp_name)
+    exp_dir <- get_exp_dir(exp_name, root_dir = "BAMDT Simulations")
+    exp <- readRDS(file.path(exp_dir, "experiment.rds")) |>
+      remove_evaluator() |>
+      add_evaluator(bamdt_fi_eval)
+    fit_results <- readRDS(file.path(exp_dir, "fit_results.rds")) |>
+      dplyr::filter(
+        stringr::str_detect(.method_name, "BAMDT")
+      ) |>
+      dplyr::rowwise() |>
+      dplyr::mutate(
+        importance = data.frame(importance) |>
+          setNames("importance") |>
+          tibble::rownames_to_column("var") |>
+          list()
+      ) |>
+      dplyr::ungroup()
+    eval_results <- evaluate_experiment(exp, fit_results) |>
+      purrr::map(
+        ~ .x |>
+          dplyr::mutate(
+            .vary_param = .data[[vary_param_name]],
+            .dgp_mode = dplyr::case_when(
+              stringr::str_detect(exp_name, "Blockwise") ~
+                "Additive Blockwise\nNetwork Effect",
+              stringr::str_detect(exp_name, "Autocorrelation") ~
+                "Network Autocorrelation\nEffect"
+            )
+          )
+      )
+  }
+)
+
+fi_results_df <- purrr::map(
+  eval_results_ls,
+  ~ dplyr::bind_rows(
+    list(
+      `BAMDT Importance` = .x$`BAMDT Feature Importances`
+    ),
+    .id = ".fi_mode"
+  )
+) |>
+  dplyr::bind_rows() |>
+  dplyr::mutate(
+    .method_name = factor(.method_name, levels = METHOD_LEVELS),
+    .dgp_name = forcats::fct_inorder(.dgp_name),
+    var = dplyr::case_when(
+      var == "spatial" ~ "Network",
+      TRUE ~ stringr::str_replace(var, "V", "X")
+    ) |>
+      factor(
+        levels = c(
+          "Network Cohesion", "Network Embedding", "Network",
+          paste0("X", 1:10)
+        )
+      ),
+    .fill = dplyr::case_when(
+      stringr::str_detect(var, "Network") ~ "Network",
+      stringr::str_detect(.dgp_name, "Linear") &
+        as.numeric(stringr::str_extract(var, "[0-9]+")) <= 2 ~ "Signal",
+      stringr::str_detect(.dgp_name, "LSS") &
+        as.numeric(stringr::str_extract(var, "[0-9]+")) <= 6 ~ "Signal",
+      stringr::str_detect(.dgp_name, "Polynomial") &
+        as.numeric(stringr::str_extract(var, "[0-9]+")) <= 6 ~ "Signal",
+      TRUE ~ "Non-signal"
+    ) |>
+      factor(levels = c("Network", "Signal", "Non-signal"))
+  ) |>
+  dplyr::filter(!is.na(var)) |>
+  dplyr::arrange(.fill, centroids_scale, omega)
+
+## Main Feature Importance Plot (use pve = 0.4)
+blue_pal <- c(
+  "#BCE0E9", "#89C9d9", "#57B2C8", "#235663", "#132E35", "#E4F1F5"
+)
+orange_pal <- c(
+  "#FFD499", "#FFB34D", "#FF9300", "#B36700", "#754400", "#FFEED6"
+)
+gray_pal <- c(
+  "#CFCFCF", "#8f8f8f", "#5f5f5f", "#3B3B3B", "#242424", "#EBEBEB"
+)
+color_pal3 <- c(blue_pal[c(1, 3, 4)], orange_pal[c(1, 3, 4)], gray_pal[c(1, 3, 5)])
+color_pal4 <- c(blue_pal[c(6, 1, 3, 4)], orange_pal[c(6, 1, 3, 4)], gray_pal[c(6, 1, 3, 5)])
+color_pal5 <- c(blue_pal, orange_pal, gray_pal)
+plt_df <- fi_results_df |>
+  dplyr::mutate(
+    .bar_vary_param = dplyr::case_when(
+      stringr::str_detect(.dgp_mode, "Blockwise") & (.vary_param == 0) ~ "None",
+      stringr::str_detect(.dgp_mode, "Blockwise") & (.vary_param == 0.5) ~ "Weak",
+      stringr::str_detect(.dgp_mode, "Blockwise") & (.vary_param == 1) ~ "Moderate",
+      stringr::str_detect(.dgp_mode, "Blockwise") & (.vary_param == 1.5) ~ "Strong",
+      stringr::str_detect(.dgp_mode, "Autocorrelation") & (.vary_param == 0.1) ~ "Weak",
+      stringr::str_detect(.dgp_mode, "Autocorrelation") & (.vary_param == 0.7) ~ "Moderate",
+      stringr::str_detect(.dgp_mode, "Autocorrelation") & (.vary_param == 0.9) ~ "Strong"
+    ) |>
+      factor(levels = c("None", "Weak", "Moderate", "Strong"))
+  ) |>
+  dplyr::filter(
+    !is.na(.bar_vary_param)
+  )
+for (pve_val in unique(fi_results_df$pve)) {
+  plt_ls <- plt_df |>
+    dplyr::filter(
+      !(var %in% c("Network Cohesion", "Network Embedding", "X9", "X10"))
+    ) |>
+    dplyr::mutate(
+      .dgp_name = dplyr::case_when(
+        stringr::str_detect(.dgp_name, "Linear") ~ "Linear",
+        stringr::str_detect(.dgp_name, "Polynomial") ~ "Polynomial",
+        stringr::str_detect(.dgp_name, "LSS") ~ "Locally Spiky Sparse (LSS)"
+      ) |>
+        factor(levels = c("Linear", "Polynomial", "Locally Spiky Sparse (LSS)"))
+    ) |>
+    dplyr::group_by(
+      .dgp_mode
+    ) |>
+    dplyr::group_map(
+      .f = function(.x, .y) {
+        dgp_mode <- .y$.dgp_mode[[1]]
+        if (stringr::str_detect(dgp_mode, "Blockwise")) {
+          fill_lab <- expression(
+            bold(paste("Network Effect (", eta, ")"))
+          )
+          tag <- dgp_mode
+          color_pal <- color_pal4
+          x_axis_theme <- ggplot2::theme(
+            axis.text.x = ggplot2::element_text(angle = 90, vjust = 0.5, hjust = 1),
+            # axis.title.x = ggplot2::element_blank()
+          )
+          tag_position <- c(-.06, 0.57)
+          legend_position <- "bottom"
+        } else if (stringr::str_detect(dgp_mode, "Autocorrelation")) {
+          fill_lab <- expression(
+            bold(paste("Network Effect (", omega, ")"))
+          )
+          tag <- dgp_mode
+          color_pal <- color_pal3
+          x_axis_theme <- ggplot2::theme(
+            axis.text.x = ggplot2::element_text(angle = 90, vjust = 0.5, hjust = 1)
+          )
+          tag_position <- c(-.06, 0.6)
+          legend_position <- "bottom"
+        }
+        .x |>
+          dplyr::filter(
+            pve == !!pve_val
+          ) |>
+          dplyr::mutate(
+            .fill = forcats::fct_inorder(paste(.fill, .bar_vary_param))
+          ) |>
+          ggplot2::ggplot() +
+          ggplot2::aes(
+            x = var,
+            y = mean_feature_importance,
+            fill = .fill
+          ) +
+          ggplot2::geom_errorbar(
+            ggplot2::aes(
+              x = var,
+              ymin = mean_feature_importance - se_feature_importance,
+              ymax = mean_feature_importance + se_feature_importance,
+              color = .fill,
+              group = .fill
+            ),
+            inherit.aes = FALSE,
+            width = 0,
+            position = ggplot2::position_dodge(0.9)
+          ) +
+          ggplot2::geom_bar(
+            linewidth = 0.2,
+            stat = "identity",
+            position = ggplot2::position_dodge(0.9)
+          ) +
+          ggplot2::facet_grid(
+            .method_name ~ .dgp_name, scales = "free_y"
+          ) +
+          ggplot2::scale_color_manual(
+            values = color_pal
+          ) +
+          ggplot2::scale_fill_manual(
+            values = color_pal
+          ) +
+          ggplot2::labs(
+            x = "Feature",
+            y = "Importance",
+            tag = tag
+          ) +
+          vthemes::theme_vmodern(size_preset = "large") +
+          x_axis_theme +
+          ggplot2::theme(
+            axis.text.y = ggplot2::element_text(size = 12),
+            plot.tag = ggplot2::element_text(
+              size = 20, face = "italic", angle = 90, hjust = 0.5, vjust = 1
+            ),
+            plot.tag.position = tag_position,
+            plot.margin = ggplot2::unit(c(0.05, 0, 0.1, 0.75), units = "in"),
+            legend.position = legend_position
+          )
+      }
+    )
+  plt <- patchwork::wrap_plots(plt_ls, ncol = 1)
+  save_figure(
+    plt, filename = sprintf("fi_bamdt_%s", pve_val),
+    width = 13, height = 11
+  )
+}
+
+
+# compare time elapsed
+exp_dir <- get_exp_dir(EXP_NAMES_BAMDT[1], root_dir = "BAMDT Simulations")
+fit_results <- readRDS(file.path(exp_dir, "fit_results.rds"))
+fit_results |>
+  dplyr::group_by(.method_name) |>
+  dplyr::summarise(
+    time_elapsed = mean(unlist(time_elapsed))
+  )
+
+

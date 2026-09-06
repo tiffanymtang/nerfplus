@@ -1,10 +1,10 @@
-classification <- FALSE
+classification <- opt$classification
 
 # embedding parameters
-embedding <- "laplacian"
+embedding <- stringr::str_split(opt$embedding_type, "_")[[1]]
 embedding_options <- list(
-  ndim = 2,
-  regularization = 0.5,
+  ndim = opt$embedding_ndim,
+  regularization = opt$embedding_reg,
   varimax = FALSE,
   center = TRUE,
   scale = TRUE

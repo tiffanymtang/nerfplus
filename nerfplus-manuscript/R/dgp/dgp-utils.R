@@ -53,7 +53,7 @@ get_connected_graph <- function(A, X, y) {
 #' @returns A list containing the training and test data, the adjacency matrix
 #'   `A`, the full adjacency matrix `A_full`, and optionally the alphas and
 #'   block IDs if provided.
-load_data <- function(X, y, A, alphas = NULL, block_ids = NULL,
+load_data <- function(X, y, A, alphas = NULL, block_ids = NULL, nodeids = NULL,
                       train_prop = 0.8, connected = FALSE) {
 
   # helper variables / setup
@@ -62,6 +62,9 @@ load_data <- function(X, y, A, alphas = NULL, block_ids = NULL,
   if (is.null(rownames(A))) {
     rownames(A) <- 1:nrow(A)
     colnames(A) <- 1:nrow(A)
+  }
+  if (!is.null(nodeids)) {
+    names(nodeids) <- rownames(X)
   }
 
   # error checking
@@ -84,11 +87,15 @@ load_data <- function(X, y, A, alphas = NULL, block_ids = NULL,
     x_test = X[-train_ids, , drop = FALSE],
     y_test = y[-train_ids]
   )
-
+  
   # get A
   train_idx <- rownames(out$x)
   test_idx <- rownames(out$x_test)
-  out$A <- A[train_idx, train_idx]
+  if (is.null(nodeids)) {
+    out$A <- A[train_idx, train_idx]
+  } else {
+    out$A <- A
+  }
 
   # restrict training to largest connected component
   if (connected) {
@@ -107,10 +114,14 @@ load_data <- function(X, y, A, alphas = NULL, block_ids = NULL,
   }
 
   # get A_full
-  out$A_full <- A[c(train_idx, test_idx), c(train_idx, test_idx)]
+  if (is.null(nodeids)) {
+    out$A_full <- A[c(train_idx, test_idx), c(train_idx, test_idx)]
+  } else {
+    out$A_full <- A
+  }
 
   # get alphas and block_ids if provided
-  if (!is.null(alphas) || !is.null(block_ids)) {
+  if (!is.null(alphas) || !is.null(block_ids) || !is.null(nodeids)) {
     out$verbose_data_out <- list()
   }
   if (!is.null(alphas)) {
@@ -121,6 +132,10 @@ load_data <- function(X, y, A, alphas = NULL, block_ids = NULL,
   }
   if (!is.null(block_ids)) {
     out$verbose_data_out$block_ids_full <- block_ids[c(train_idx, test_idx)]
+  }
+  if (!is.null(nodeids)) {
+    out$verbose_data_out$nodeids <- nodeids[train_idx]
+    out$verbose_data_out$nodeids_test <- nodeids[test_idx]
   }
   return(out)
 }
