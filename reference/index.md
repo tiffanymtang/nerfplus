@@ -15,6 +15,8 @@
   : Interpret NeRF+ Model
 - [`nerfplus()`](https://tiffanymtang.github.io/nerfplus/reference/nerfplus.md)
   : Fit Network-assisted Random Forest+ (NeRF+)
+- [`nerfplus_conformal()`](https://tiffanymtang.github.io/nerfplus/reference/nerfplus_conformal.md)
+  : Conformal prediction method for NeRF+
 - [`nerfplus_cv()`](https://tiffanymtang.github.io/nerfplus/reference/nerfplus_cv.md)
   : Fit Network-assisted Random Forest+ (NeRF+) with Cross-Validation
 - [`oos_network_embedding()`](https://tiffanymtang.github.io/nerfplus/reference/oos_network_embedding.md)

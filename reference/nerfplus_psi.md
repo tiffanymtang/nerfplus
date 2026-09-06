@@ -13,7 +13,8 @@ fit_psi(
   node_preds,
   unordered_factors = NULL,
   normalize = FALSE,
-  inbag_counts = NULL
+  inbag_counts = NULL,
+  as_matrix = FALSE
 )
 
 apply_psi(
@@ -22,7 +23,8 @@ apply_psi(
   tree_paths,
   node_preds,
   unordered_factors = NULL,
-  psi_unique_values = NULL
+  psi_unique_values = NULL,
+  as_matrix = FALSE
 )
 ```
 

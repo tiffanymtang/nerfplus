@@ -23,7 +23,7 @@ prettyDashboardHeader(
   also be used as the title shown in the browser's title bar. If you
   want that to be different from the text in the dashboard header bar,
   set the `title` in
-  [`dashboardPage`](https://rdrr.io/pkg/shinydashboard/man/dashboardPage.html).
+  [`dashboardPage()`](https://rdrr.io/pkg/shinydashboard/man/dashboardPage.html).
 
 - title_position:
 

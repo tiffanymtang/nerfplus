@@ -11,7 +11,9 @@ tree_local_fi(
   A_full = NULL,
   nodeids = NULL,
   x_means = NULL,
-  grouped_features = NULL
+  grouped_features = NULL,
+  L_full = NULL,
+  solve_cache = NULL
 )
 ```
 

@@ -27,9 +27,12 @@
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/iconRadioGroupUI.html</loc></url>
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/index.html</loc></url>
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/interpret_nerfplus.html</loc></url>
+<url><loc>https://tiffanymtang.github.io/nerfplus/reference/make_laplacian.html</loc></url>
+<url><loc>https://tiffanymtang.github.io/nerfplus/reference/make_sparse_laplacian.html</loc></url>
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/material_switch.html</loc></url>
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/nerfplus.html</loc></url>
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/nerfplus_augmentation.html</loc></url>
+<url><loc>https://tiffanymtang.github.io/nerfplus/reference/nerfplus_conformal.html</loc></url>
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/nerfplus_cv.html</loc></url>
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/nerfplus_preprocessing.html</loc></url>
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/nerfplus_psi.html</loc></url>
@@ -54,6 +57,7 @@
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/rnc_linear_path.html</loc></url>
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/rnc_logistic.html</loc></url>
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/rnc_logistic_path.html</loc></url>
+<url><loc>https://tiffanymtang.github.io/nerfplus/reference/rnc_logistic_scaled_laplacian.html</loc></url>
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/rsq_narm_vec.html</loc></url>
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/run_app.html</loc></url>
 <url><loc>https://tiffanymtang.github.io/nerfplus/reference/run_button.html</loc></url>
