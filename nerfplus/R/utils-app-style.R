@@ -208,6 +208,10 @@ use_pretty_style <- function() {
 #'
 #' @inheritParams shinydashboardPlus::box
 #' @param color Box outline color.
+#' @param status Box status controlling the header and border color. Supported
+#'   values are `"primary"`, `"success"`, `"info"`, `"warning"`, `"danger"`,
+#'   `"navy"`, `"teal"`, `"purple"`, `"orange"`, `"maroon"`, and `"black"`.
+#'   Only the first five values support a solid header.
 #' @param box_only If `TRUE`, only return the box and not the box wrapped inside
 #'   `shiny::fluidRow()`.
 #' @param ... Arguments passed to `shinydashboardPlus::box()`.

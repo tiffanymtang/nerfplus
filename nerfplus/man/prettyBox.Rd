@@ -27,22 +27,10 @@ contains the box.}
 
 \item{color}{Box outline color.}
 
-\item{status}{The status of the item This determines the item's background
-  color.  Valid statuses are defined as follows:
-\itemize{
-  \item \code{primary}: \Sexpr[results=rd, stage=render]{shinydashboardPlus:::rd_color_tag("#3c8dbc")}
-  \item \code{success}: \Sexpr[results=rd, stage=render]{shinydashboardPlus:::rd_color_tag("#00a65a")}
-  \item \code{info}: \Sexpr[results=rd, stage=render]{shinydashboardPlus:::rd_color_tag("#00c0ef")}
-  \item \code{warning}: \Sexpr[results=rd, stage=render]{shinydashboardPlus:::rd_color_tag("#f39c12")}
-  \item \code{danger}: \Sexpr[results=rd, stage=render]{shinydashboardPlus:::rd_color_tag("#f56954")}
-  \item \code{navy}: \Sexpr[results=rd, stage=render]{shinydashboardPlus:::rd_color_tag("#001F3F")}
-  \item \code{teal}: \Sexpr[results=rd, stage=render]{shinydashboardPlus:::rd_color_tag("#39CCCC")}
-  \item \code{purple}: \Sexpr[results=rd, stage=render]{shinydashboardPlus:::rd_color_tag("#605ca8")}
-  \item \code{orange}: \Sexpr[results=rd, stage=render]{shinydashboardPlus:::rd_color_tag("#ff851b")}
-  \item \code{maroon}: \Sexpr[results=rd, stage=render]{shinydashboardPlus:::rd_color_tag("#D81B60")}
-  \item \code{black}: \Sexpr[results=rd, stage=render]{shinydashboardPlus:::rd_color_tag("#111111")}
-}
-Only primary, success, info, warning and danger are compatible with solidHeader!}
+\item{status}{Box status controlling the header and border color. Supported
+values are \code{"primary"}, \code{"success"}, \code{"info"}, \code{"warning"}, \code{"danger"},
+\code{"navy"}, \code{"teal"}, \code{"purple"}, \code{"orange"}, \code{"maroon"}, and \code{"black"}.
+Only the first five values support a solid header.}
 
 \item{solidHeader}{Should the header be shown with a solid color background?}
 
