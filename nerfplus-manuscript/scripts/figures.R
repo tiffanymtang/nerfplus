@@ -3187,6 +3187,100 @@ save_figure(
   width = 10, height = 4.5
 )
 
+# Compare to posterior prediction intervals from BART-based methods
+posterior_PI_summary <- function(fit, y_test, level = 0.95) {
+  # mu: rows = posterior draws; columns = test observations
+  mu <- fit$yhat.test
+  sigma <- as.numeric(fit$sigma)
+  burnin <- length(sigma) - nrow(mu)
+  sigma <- sigma[(burnin + 1):length(sigma)]
+
+  z <- matrix(rnorm(length(mu)), nrow = nrow(mu), ncol = ncol(mu))
+  y_new <- mu + sweep(z, 1, sigma, "*")
+
+  alpha <- 1 - level
+  interval <- t(apply(
+    y_new, 2, quantile,
+    probs = c(alpha / 2, 1 - alpha / 2),
+    names = FALSE
+  ))
+
+  data.frame(
+    lower = interval[, 1],
+    upper = interval[, 2],
+    width = interval[, 2] - interval[, 1],
+    in_interval = (y_test >= interval[, 1]) & (y_test <= interval[, 2])
+  ) |>
+    dplyr::summarise(
+      width = mean(width),
+      coverage = mean(in_interval)
+    )
+}
+
+bart_eval_results <- purrr::map(
+  EXP_NAMES_MAIN,
+  function(exp_name) {
+    fit_results <- readRDS(
+      file.path(RESULTS_DIR, "BART Prediction Intervals Simulations", exp_name, "fit_results.rds")
+    ) |>
+    dplyr::rowwise() |>
+    dplyr::mutate(
+      posterior_PI = list(posterior_PI_summary(fit, y_test))
+    ) |>
+    tidyr::unnest(posterior_PI) |>
+    dplyr::group_by(.dgp_name, .method_name) |>
+    dplyr::summarise(
+      mean_width = mean(width),
+      se_width = sd(width) / sqrt(dplyr::n()),
+      mean_coverage = mean(coverage),
+      .groups = "drop"
+    )
+  }
+) |>
+  dplyr::bind_rows() |>
+  dplyr::mutate(
+    .dgp_type = dplyr::case_when(
+      stringr::str_detect(.dgp_name, "Additive Blockwise") ~ "Additive Blockwise Network Effect",
+      stringr::str_detect(.dgp_name, "Autocorrelation") ~ "Network Autocorrelation Effect"
+    ),
+    .dgp_name = dplyr::case_when(
+      stringr::str_detect(.dgp_name, "Linear") ~ "Linear",
+      stringr::str_detect(.dgp_name, "LSS") ~ "Locally\nSpiky\nSparse",
+      stringr::str_detect(.dgp_name, "Poly") ~ "Polynomial"
+    )
+  )
+
+# # table with coverage
+# kab <- dplyr::bind_rows(
+#   eval_results |> dplyr::rename(mean_width = mean_ci_width, se_width = se_ci_width), 
+#   bart_eval_results
+# ) |>
+#   dplyr::select(.dgp_name, .dgp_type, .method_name, mean_width, mean_coverage) |>
+#   tidyr::pivot_wider(
+#     names_from = c(.dgp_name, .dgp_type),
+#     values_from = c(mean_width, mean_coverage)
+#   ) |>
+#   kableExtra::kable(
+#     format = "latex", digits = 2, booktabs = TRUE, linesep = ""
+#   )
+
+# table with widths (SE) only
+kab <- dplyr::bind_rows(
+  eval_results |> dplyr::rename(mean_width = mean_ci_width, se_width = se_ci_width), 
+  bart_eval_results
+) |>
+  dplyr::mutate(
+    width_str = sprintf("%.2f (%.2f)", mean_width, se_width)
+  ) |>
+  dplyr::select(.dgp_name, .dgp_type, .method_name, width_str) |>
+  tidyr::pivot_wider(
+    names_from = .method_name,
+    values_from = width_str
+  ) |>
+  kableExtra::kable(
+    format = "latex", booktabs = TRUE, linesep = ""
+  )
+
 ################################################################################
 ######################## Multi-obs per Node Results ############################
 ################################################################################

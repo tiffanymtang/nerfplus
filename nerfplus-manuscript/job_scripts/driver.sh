@@ -50,12 +50,20 @@ qsub -N philly_crime_local_importance -pe smp 1 -t 3-3 submit_philly_crime_job.s
 qsub -N philly_crime_conformal -t 3-3 submit_philly_crime_job.sh 06d_philly_crime_conformal --include_weather
 
 # run conformal simulations
-qsub -N conformal_linear_additive submit_job.sh 07_conformal_prediction --nreps 100 --save --dgp linear_additive_block
-qsub -N conformal_linear_netar submit_job.sh 07_conformal_prediction --nreps 100 --save --dgp linear_autocorrelation
-qsub -N conformal_poly_additive submit_job.sh 07_conformal_prediction --nreps 100 --save --dgp poly_additive_block
-qsub -N conformal_poly_netar submit_job.sh 07_conformal_prediction --nreps 100 --save --dgp poly_autocorrelation
-qsub -N conformal_lss_additive submit_job.sh 07_conformal_prediction --nreps 100 --save --dgp lss_additive_block
-qsub -N conformal_lss_netar submit_job.sh 07_conformal_prediction --nreps 100 --save --dgp lss_autocorrelation
+qsub -N conformal_linear_additive submit_job.sh 07a_conformal_prediction --nreps 100 --save --dgp linear_additive_block
+qsub -N conformal_linear_netar submit_job.sh 07a_conformal_prediction --nreps 100 --save --dgp linear_autocorrelation
+qsub -N conformal_poly_additive submit_job.sh 07a_conformal_prediction --nreps 100 --save --dgp poly_additive_block
+qsub -N conformal_poly_netar submit_job.sh 07a_conformal_prediction --nreps 100 --save --dgp poly_autocorrelation
+qsub -N conformal_lss_additive submit_job.sh 07a_conformal_prediction --nreps 100 --save --dgp lss_additive_block
+qsub -N conformal_lss_netar submit_job.sh 07a_conformal_prediction --nreps 100 --save --dgp lss_autocorrelation
+
+# run BART prediction interval simulations
+qsub -N bart_pi_linear_additive submit_job.sh 07b_bart_prediction_intervals --nreps 100 --save --dgp linear_additive_block
+qsub -N bart_pi_linear_netar submit_job.sh 07b_bart_prediction_intervals --nreps 100 --save --dgp linear_autocorrelation
+qsub -N bart_pi_poly_additive submit_job.sh 07b_bart_prediction_intervals --nreps 100 --save --dgp poly_additive_block
+qsub -N bart_pi_poly_netar submit_job.sh 07b_bart_prediction_intervals --nreps 100 --save --dgp poly_autocorrelation
+qsub -N bart_pi_lss_additive submit_job.sh 07b_bart_prediction_intervals --nreps 100 --save --dgp lss_additive_block
+qsub -N bart_pi_lss_netar submit_job.sh 07b_bart_prediction_intervals --nreps 100 --save --dgp lss_autocorrelation
 
 # run main simulations with different network embeddings
 qsub -N linear_additive_ase submit_job.sh 01a_main_simulations --nreps 100 --save --dgp linear_additive_block --embedding_type adjacency --nerfplus_only
