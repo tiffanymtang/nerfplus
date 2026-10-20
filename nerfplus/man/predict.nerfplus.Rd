@@ -11,7 +11,8 @@
   A_full,
   nodeids = NULL,
   type = c("response", "alpha"),
-  return_all = FALSE
+  return_all = FALSE,
+  ...
 )
 }
 \arguments{
@@ -40,6 +41,8 @@ the estimated individual node effects are returned.}
 \item{return_all}{If \code{TRUE}, returns a list of predictions for each tree in
 the ensemble. If \code{FALSE} (default), returns the average prediction across
 all trees.}
+
+\item{...}{Additional arguments, currently unused.}
 }
 \value{
 If \code{return_all = FALSE}, this function returns a vector of predicted

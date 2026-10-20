@@ -1246,6 +1246,7 @@ nerfplus_conformal <- function(object, x_cal, x_cal_embed = NULL, y_cal,
 #' @param return_all If `TRUE`, returns a list of predictions for each tree in
 #'   the ensemble. If `FALSE` (default), returns the average prediction across
 #'   all trees.
+#' @param ... Additional arguments, currently unused.
 #'
 #' @returns If `return_all = FALSE`, this function returns a vector of predicted
 #'   values (if `type = "response"`) or estimated individual node effects (if
@@ -1275,7 +1276,7 @@ nerfplus_conformal <- function(object, x_cal, x_cal_embed = NULL, y_cal,
 #' @export
 predict.nerfplus <- function(object, x, x_embed = NULL, A_full, nodeids = NULL,
                              type = c("response", "alpha"),
-                             return_all = FALSE) {
+                             return_all = FALSE, ...) {
   type <- match.arg(type)
 
   rf_fit <- object$rf_fit
