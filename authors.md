@@ -7,13 +7,13 @@
 
 ## Citation
 
-Tang T (2026). *nerfplus: Network-assisted Random Forest+ (NeRF+)*. R
-package version 0.0.0.9000, <https://tiffanymtang.github.io/nerfplus/>.
+Tang T (2026). *nerfplus: Network-Assisted Random Forest+ (NeRF+)*. R
+package version 1.0.0, <https://tiffanymtang.github.io/nerfplus/>.
 
     @Manual{,
-      title = {nerfplus: Network-assisted Random Forest+ (NeRF+)},
+      title = {nerfplus: Network-Assisted Random Forest+ (NeRF+)},
       author = {Tiffany Tang},
       year = {2026},
-      note = {R package version 0.0.0.9000},
+      note = {R package version 1.0.0},
       url = {https://tiffanymtang.github.io/nerfplus/},
     }

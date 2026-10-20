@@ -42,33 +42,10 @@ prettyBox(
 
 - status:
 
-  The status of the item This determines the item's background color.
-  Valid statuses are defined as follows:
-
-  - `primary`: \#3c8dbc
-
-  - `success`: \#00a65a
-
-  - `info`: \#00c0ef
-
-  - `warning`: \#f39c12
-
-  - `danger`: \#f56954
-
-  - `navy`: \#001F3F
-
-  - `teal`: \#39CCCC
-
-  - `purple`: \#605ca8
-
-  - `orange`: \#ff851b
-
-  - `maroon`: \#D81B60
-
-  - `black`: \#111111
-
-  Only primary, success, info, warning and danger are compatible with
-  solidHeader!
+  Box status controlling the header and border color. Supported values
+  are `"primary"`, `"success"`, `"info"`, `"warning"`, `"danger"`,
+  `"navy"`, `"teal"`, `"purple"`, `"orange"`, `"maroon"`, and `"black"`.
+  Only the first five values support a solid header.
 
 - solidHeader:
 
