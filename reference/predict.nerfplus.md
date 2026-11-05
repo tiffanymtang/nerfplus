@@ -13,7 +13,8 @@ predict(
   A_full,
   nodeids = NULL,
   type = c("response", "alpha"),
-  return_all = FALSE
+  return_all = FALSE,
+  ...
 )
 ```
 
@@ -59,6 +60,10 @@ predict(
   If `TRUE`, returns a list of predictions for each tree in the
   ensemble. If `FALSE` (default), returns the average prediction across
   all trees.
+
+- ...:
+
+  Additional arguments, currently unused.
 
 ## Value
 

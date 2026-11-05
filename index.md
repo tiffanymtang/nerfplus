@@ -14,8 +14,14 @@ toolkit.
 
 ## Installation
 
-You can install the development version of nerfplus from
-[GitHub](https://github.com/) with:
+You can install the `nerfplus` R package from CRAN via:
+
+``` r
+
+install.packages("nerfplus")
+```
+
+or the latest developmental version from GitHub via:
 
 ``` r
 
