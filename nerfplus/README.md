@@ -21,8 +21,13 @@ toolkit.
 
 ## Installation
 
-You can install the development version of nerfplus from
-[GitHub](https://github.com/) with:
+You can install the `nerfplus` R package from CRAN via:
+
+``` r
+install.packages("nerfplus")
+```
+
+or the latest developmental version from GitHub via:
 
 ``` r
 # install.packages("remotes")
@@ -129,7 +134,7 @@ data.frame(ytest = example_data$ytest, yhat = yhat) |>
   ggplot2::theme_minimal()
 ```
 
-<img src="man/figures/README-predict-plot-1.png" width="100%" />
+<img src="man/figures/README-predict-plot-1.png" alt="" width="100%" />
 
 To next interpret our fitted NeRF+ model, we can report:
 

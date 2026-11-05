@@ -27,7 +27,13 @@ This repository contains:
 
 ## Installation of the R package
 
-You can install the `nerfplus` R package via:
+You can install the `nerfplus` R package from CRAN via:
+
+``` r
+install.packages("nerfplus")
+```
+
+or the latest developmental version from GitHub via:
 
 ``` r
 # install.packages("remotes")
